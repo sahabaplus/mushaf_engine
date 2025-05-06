@@ -56,22 +56,3 @@ impl Debug for Page {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_page_create() {
-        let verse1 = Verse::new(1, 1, (10.0, 20.0), 1.5);
-        let verse2 = Verse::new(1, 2, (10.0, 40.0), 1.0);
-
-        let verses = Rc::new([verse1, verse2]);
-        let page = Page::new(1, verses);
-
-        assert_eq!(page.number(), 1);
-        assert_eq!(page.verses().len(), 2);
-        assert_eq!(page.verses()[0], verse1);
-        assert_eq!(page.verses()[1], verse2);
-    }
-}

@@ -53,7 +53,7 @@ struct JsonVerse {
     sura: u8,
     ayah: u16,
     lines: f32,
-    y: f32,
+    y: u8,
     x: f32,
 }
 
@@ -101,8 +101,7 @@ mod test {
                 page
                     .verses()
                     .iter()
-                    .fold(0f32, |acc, e| acc + e.lines)
-                    .round() + suras_headers;
+                    .fold(0f32, |acc, e| ((acc + e.lines) * 100.00).round() / 100.00) + suras_headers;
             println!("{:#?}", page);
             println!(
                 "\t{}:{}\n",

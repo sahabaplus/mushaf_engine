@@ -7,7 +7,7 @@ use colored::Colorize;
 pub struct Verse {
     pub sura: u8,
     pub number: u16,
-    pub position: (f32, f32),
+    pub position: (f32, u8), // (0.0-1.0, 1-15)
     pub lines: f32,
 }
 
@@ -41,7 +41,7 @@ impl std::hash::Hash for Verse {
         // If you want to hash position and lines, you'd need to convert them
         // For example:
         self.position.0.to_bits().hash(state);
-        self.position.1.to_bits().hash(state);
+        self.position.1.hash(state);
         self.lines.to_bits().hash(state);
     }
 }
@@ -74,7 +74,7 @@ impl std::fmt::Display for Verse {
 
 // Implement some useful methods for the Verse struct
 impl Verse {
-    pub fn new(sura: u8, number: u16, position: (f32, f32), lines: f32) -> Self {
+    pub fn new(sura: u8, number: u16, position: (f32, u8), lines: f32) -> Self {
         Self {
             sura,
             number,

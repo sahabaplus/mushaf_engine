@@ -114,7 +114,7 @@ impl IMushafEngine for BaseMushafEngine {
                 verse_idx = 0;
 
                 // Check if we've reached the end of the mushaf
-                if page_idx >= mushaf.len() {
+                if page_idx >= mushaf.len() && direction == Direction::Downwards {
                     page_idx = mushaf.len() - 1;
                     verse_idx = mushaf[page_idx].verses().len() - 1;
                     break;
@@ -122,17 +122,24 @@ impl IMushafEngine for BaseMushafEngine {
             }
 
             // Check wither the verse is in different sura
-            let next_verse = mushaf[page_idx].verses()[verse_idx];
+            let next_verse = {
+                if page_idx >= mushaf.len() {
+                    page_idx = mushaf.len() - 1;
+                    Verse::new(115, 1, (0f32, 0), 0f32)
+                } else {
+                    mushaf[page_idx].verses()[verse_idx]
+                }
+            };
             if next_verse.sura != current_verse.sura && direction == Direction::Upwards {
-                let next_sura = dbg!(current_verse.sura - 1);
+                let next_sura = current_verse.sura - 1;
                 let next_sura = self.metadata.get_sura_info(next_sura);
-                if dbg!(next_sura).is_none() {
+                if next_sura.is_none() {
                     // We reached the start of mushaf, we will return the last verse of الفاتحة
                     return &mushaf[0].verses().last().unwrap();
                 }
                 let next_sura = next_sura.unwrap();
                 let new_start_page = next_sura.start_page as usize;
-                page_idx = dbg!((new_start_page - 1) as usize);
+                page_idx = (new_start_page - 1) as usize;
 
                 // find the first verse of next_sura
                 'inner: for (i, verse) in mushaf[page_idx].verses().iter().enumerate() {
@@ -152,6 +159,8 @@ impl IMushafEngine for BaseMushafEngine {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use colored::Colorize;
+
     use super::*;
     use crate::king_fahad_mushaf::KingFahadMushaf;
 
@@ -173,12 +182,33 @@ mod tests {
         // assert!(false);
     }
     #[test]
-    fn navigate_15_lines_2() {
+    fn navigate_upwards() {
         let engine = setup_engine();
 
-        let v = engine.navigate(37f32, 2, 282, Direction::Upwards);
-        println!("Found: {}", v);
-        assert!(false);
+        let v = engine.navigate(35.3f32, 2, 282, Direction::Upwards);
+        assert_eq!(v.sura, 1);
+        assert_eq!(v.number, 6);
+
+        let v = engine.navigate(14.7f32, 114, 1, Direction::Upwards);
+        println!("{:?}", engine.mushaf.get_page(604).unwrap());
+        println!(
+            "Sum: {}",
+            (
+                engine.mushaf
+                    .get_page(604)
+                    .unwrap()
+                    .verses()
+                    .iter()
+                    .map(|v| v.lines)
+                    .sum::<f32>() + ((3 * 2) as f32)
+            )
+                .to_string()
+                .yellow()
+                .bold()
+        );
+        println!("{}", v);
+        assert_eq!(v.sura, 112);
+        assert_eq!(v.number, 4);
     }
 
     #[test]
@@ -198,33 +228,6 @@ mod tests {
 
         // Navigate from Al-Fatiha verse 1 downwards by 15 lines (one page)
         let result = engine.navigate(15f32, 1, 1, Direction::Downwards);
-
-        // Should be on page 2
-        let page2 = engine.mushaf.get_page(2).unwrap();
-        let on_page2 = page2
-            .verses()
-            .iter()
-            .any(|v| v.sura == result.sura && v.number == result.number);
-
-        assert!(on_page2, "Result verse should be on page 2");
-    }
-
-    #[test]
-    fn navigate_upwards() {
-        return;
-        let engine = setup_engine();
-
-        // Find a verse on page 3
-        let page3 = engine.mushaf.get_page(3).unwrap();
-        let first_verse = page3.verses()[0];
-
-        // Navigate upwards by 15 lines
-        let result = engine.navigate(
-            15f32,
-            first_verse.sura,
-            first_verse.number,
-            Direction::Upwards
-        );
 
         // Should be on page 2
         let page2 = engine.mushaf.get_page(2).unwrap();

@@ -10,7 +10,7 @@ mod base_mushaf_engine;
 ///
 /// * `Downwards` - Navigate from Sura Al-Fatiha (1) towards Sura An-Nas (114)
 /// * `Upwards` - Navigate from Sura An-Nas (114) towards Sura Al-Fatiha (1)
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     #[default]
     Downwards,
@@ -34,5 +34,5 @@ pub trait IMushafEngine {
     /// # Returns
     ///
     /// The `Verse` at the target position after navigation
-    fn navigate(&self, lines: f32, from_sura: u8, from_verse: u16, direction: Direction) -> Verse;
+    fn navigate(&self, lines: f32, from_sura: u8, from_verse: u16, direction: Direction) -> &Verse;
 }

@@ -1,7 +1,7 @@
 mod quran_metadata;
 mod verse;
 mod page;
-use std::rc::Rc;
+use std::{ fmt::Display, rc::Rc };
 pub use page::Page;
 pub use verse::Verse;
 pub use quran_metadata::{ QuranMetadata, SuraInfo };
@@ -32,37 +32,48 @@ impl Mushaf {
 
         Some(&self.pages[(page_number as usize) - 1])
     }
+}
 
-    // Display summary info with colors if enabled
-    #[cfg(feature = "colored_output")]
-    pub fn display_summary(&self) {
-        println!("{}", "=== Mushaf Summary ===".bright_green().bold());
-        println!("{}: {}", "Total Pages".yellow(), self.max_page.to_string().cyan());
-        println!("{}: {}", "Lines per Page".yellow(), self.lines_per_page.to_string().cyan());
-        println!(
-            "{}: {}",
-            "Total Verses".yellow(),
-            self.pages
-                .iter()
-                .map(|p| p.verses().len())
-                .sum::<usize>()
-                .to_string()
-                .cyan()
-        );
-    }
+impl Display for Mushaf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Display summary info with colors if enabled
+        #[cfg(feature = "colored_output")]
+        {
+            write!(f, "{}", "=== Mushaf Summary ===\n".bright_green().bold());
+            write!(f, "{}: {}\n", "Total Pages".yellow(), self.max_page.to_string().cyan());
+            write!(
+                f,
+                "{}: {}\n",
+                "Lines per Page".yellow(),
+                self.lines_per_page.to_string().cyan()
+            );
+            write!(
+                f,
+                "{}: {}\n",
+                "Total Verses".yellow(),
+                self.pages
+                    .iter()
+                    .map(|p| p.verses().len())
+                    .sum::<usize>()
+                    .to_string()
+                    .cyan()
+            )
+        }
 
-    // Plain display when colored feature is not enabled
-    #[cfg(not(feature = "colored_output"))]
-    pub fn display_summary(&self) {
-        println!("=== Mushaf Summary ===");
-        println!("Total Pages: {}", self.max_page);
-        println!("Lines per Page: {}", self.lines_per_page);
-        println!(
-            "Total Verses: {}",
-            self.pages
-                .iter()
-                .map(|p| p.verses().len())
-                .sum::<usize>()
-        );
+        // Plain display when colored feature is not enabled
+        #[cfg(not(feature = "colored_output"))]
+        {
+            write!(f, "=== Mushaf Summary ===\n");
+            write!(f, "Total Pages: {}\n", self.max_page);
+            write!(f, "Lines per Page: {}\n", self.lines_per_page);
+            write!(
+                f,
+                "Total Verses: {}\n",
+                self.pages
+                    .iter()
+                    .map(|p| p.verses().len())
+                    .sum::<usize>()
+            )
+        }
     }
 }

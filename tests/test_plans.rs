@@ -1,0 +1,188 @@
+#[cfg(test)]
+mod test {
+    #[allow(unused)]
+    const QURAN_SURAS: [&str; 115] = [
+        "NONE",
+        "الْفَاتِحَةُ",
+        "الْبَقَرَةُ",
+        "آلِ عِمْرَانَ",
+        "النِّسَاءُ",
+        "الْمَائِدَةُ",
+        "الْأَنْعَامُ",
+        "الْأَعْرَافُ",
+        "الْأَنْفَالُ",
+        "التَّوْبَةُ",
+        "يُونُسُ",
+        "هُودٌ",
+        "يُوسُفُ",
+        "الرَّعْدُ",
+        "إِبْرَاهِيمُ",
+        "الْحِجْرُ",
+        "النَّحْلُ",
+        "الْإِسْرَاءُ",
+        "الْكَهْفُ",
+        "مَرْيَمُ",
+        "طٰهٰ",
+        "الْأَنْبِيَاءُ",
+        "الْحَجُّ",
+        "الْمُؤْمِنُونَ",
+        "النُّورُ",
+        "الْفُرْقَانُ",
+        "الشُّعَرَاءُ",
+        "النَّمْلُ",
+        "الْقَصَصُ",
+        "الْعَنْكَبُوتُ",
+        "الرُّومُ",
+        "لُقْمَانُ",
+        "السَّجْدَةُ",
+        "الْأَحْزَابُ",
+        "سَبَأٌ",
+        "فَاطِرُ",
+        "يٰسۤ",
+        "الصَّافَّاتُ",
+        "صۤ",
+        "الزُّمَرُ",
+        "غَافِرٌ",
+        "فُصِّلَتْ",
+        "الشُّورَىٰ",
+        "الزُّخْرُفُ",
+        "الدُّخَانُ",
+        "الْجَاثِيَةُ",
+        "الْأَحْقَافُ",
+        "مُحَمَّدٌ",
+        "الْفَتْحُ",
+        "الْحُجُرَاتُ",
+        "قۤ",
+        "الذَّارِيَاتُ",
+        "الطُّورُ",
+        "النَّجْمُ",
+        "الْقَمَرُ",
+        "الرَّحْمٰنُ",
+        "الْوَاقِعَةُ",
+        "الْحَدِيدُ",
+        "الْمُجَادَلَةُ",
+        "الْحَشْرُ",
+        "الْمُمْتَحَنَةُ",
+        "الصَّفُّ",
+        "الْجُمُعَةُ",
+        "الْمُنَافِقُونَ",
+        "التَّغَابُنُ",
+        "الطَّلَاقُ",
+        "التَّحْرِيمُ",
+        "الْمُلْكُ",
+        "الْقَلَمُ",
+        "الْحَاقَّةُ",
+        "الْمَعَارِجُ",
+        "نُوحٌ",
+        "الْجِنُّ",
+        "الْمُزَّمِّلُ",
+        "الْمُدَّثِّرُ",
+        "الْقِيَامَةُ",
+        "الْإِنْسَانُ",
+        "الْمُرْسَلَاتُ",
+        "النَّبَأُ",
+        "النَّازِعَاتُ",
+        "عَبَسَ",
+        "التَّكْوِيرُ",
+        "الْانْفِطَارُ",
+        "الْمُطَفِّفِينَ",
+        "الْانْشِقَاقُ",
+        "الْبُرُوجُ",
+        "الطَّارِقُ",
+        "الْأَعْلَىٰ",
+        "الْغَاشِيَةُ",
+        "الْفَجْرُ",
+        "الْبَلَدُ",
+        "الشَّمْسُ",
+        "اللَّيْلُ",
+        "الضُّحَىٰ",
+        "الشَّرْحُ",
+        "التِّينُ",
+        "الْعَلَقُ",
+        "الْقَدْرُ",
+        "الْبَيِّنَةُ",
+        "الزَّلْزَلَةُ",
+        "الْعَادِيَاتُ",
+        "الْقَارِعَةُ",
+        "التَّكَاثُرُ",
+        "الْعَصْرُ",
+        "الْهُمَزَةُ",
+        "الْفِيلُ",
+        "قُرَيْشٌ",
+        "الْمَاعُونُ",
+        "الْكَوْثَرُ",
+        "الْكَافِرُونَ",
+        "النَّصْرُ",
+        "الْمَسَدُ",
+        "الْإِخْلَاصُ",
+        "الْفَلَقُ",
+        "النَّاسُ",
+    ];
+    use std::{ path::PathBuf, rc::Rc };
+    use rust_quran_engine::{
+        king_fahad_mushaf::KingFahadMushaf,
+        mushaf_engine::{ base_mushaf_engine::BaseMushafEngine, Direction, IMushafEngine },
+    };
+
+    fn setup_engine() -> BaseMushafEngine {
+        let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        data_path.push("data");
+        data_path.push("king_fahad_mushaf.json");
+
+        let mushaf = Rc::new(KingFahadMushaf::new(data_path.to_str().unwrap()));
+        BaseMushafEngine::new(mushaf)
+    }
+
+    // Function to reverse the visual representation of RTL text for terminal
+    #[allow(unused)]
+    fn reverse_for_terminal(text: &str) -> String {
+        // Convert the string to an array of characters and reverse it
+        let reversed: String = text.chars().rev().collect();
+        reversed
+    }
+
+    #[test]
+    fn faces_upwards_navigation() {
+        let engine = setup_engine();
+
+        let v = engine.navigate(15_f32, 114, 1, Direction::Upwards);
+        assert_eq!(v.sura, 112); // الإخلاص
+        assert_eq!(v.number, 4);
+
+        // println!("Verse: {}, {}", v, reverse_for_terminal(QURAN_SURAS[v.sura as usize]));
+
+        let v = engine.navigate(30_f32, 114, 1, Direction::Upwards);
+        assert_eq!(v.sura, 109); // الكافرون
+        assert_eq!(v.number, 6);
+
+        let v = engine.navigate(45_f32, 114, 1, Direction::Upwards);
+        assert_eq!(v.sura, 106); // قريش
+        assert_eq!(v.number, 4);
+
+        let v = engine.navigate(15_f32, 108, 1, Direction::Upwards);
+        assert_eq!(v.sura, 106); // قريش
+        assert_eq!(v.number, 4);
+    }
+
+    #[test]
+    fn faces_downwards_navigation() {
+        let engine = setup_engine();
+
+        let v = engine.navigate(15_f32, 2, 6, Direction::Downwards);
+        assert_eq!(v.sura, 2);
+        assert_eq!(v.number, 16);
+
+        let v = engine.navigate(30_f32, 2, 6, Direction::Downwards);
+        assert_eq!(v.sura, 2);
+        assert_eq!(v.number, 24);
+
+        let v = engine.navigate(15_f32, 2, 16, Direction::Downwards);
+        assert_eq!(v.sura, 2);
+        assert_eq!(v.number, 24);
+
+        let v = engine.navigate(30_f32, 4, 171, Direction::Downwards);
+        println!("Verse: {}, {}", v, reverse_for_terminal(QURAN_SURAS[v.sura as usize]));
+        assert_eq!(v.sura, 5); // قريش
+        assert_eq!(v.number, 2);
+    }
+}

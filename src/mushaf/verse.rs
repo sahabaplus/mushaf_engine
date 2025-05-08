@@ -3,11 +3,19 @@ use std::cmp::Ordering;
 #[cfg(feature = "colored_output")]
 use colored::Colorize;
 
+/// Information about a single verse (ayah) in the Quran
+///
+/// This struct contains metadata about a verse, including its sura and number,
+/// its position on the page, and how many lines it spans.
 #[derive(Debug, Clone, Copy, Default, PartialEq, PartialOrd)]
 pub struct Verse {
+    /// Number of the Sura (1-114) containing this verse
     pub sura: u8,
+    /// Number of the verse within its sura
     pub number: u16,
-    pub position: (f32, u8), // (0.0-1.0, 1-15)
+    /// Position on the page as (x position 0.0-1.0, line number 1-15)
+    pub position: (f32, u8),
+    /// Number of lines this verse spans (can be fractional)
     pub lines: f32,
 }
 
@@ -74,6 +82,16 @@ impl std::fmt::Display for Verse {
 
 // Implement some useful methods for the Verse struct
 impl Verse {
+    /// Create a new Verse with the specified parameters
+    ///
+    /// # Arguments
+    /// * `sura` - Sura number (1-114)
+    /// * `number` - Verse number within the sura
+    /// * `position` - Position on the page as (relative position 0.0-1.0, line number)
+    /// * `lines` - Number of lines this verse spans (can be fractional)
+    ///
+    /// # Returns
+    /// A new Verse instance
     pub fn new(sura: u8, number: u16, position: (f32, u8), lines: f32) -> Self {
         Self {
             sura,

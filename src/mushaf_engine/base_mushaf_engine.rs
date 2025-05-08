@@ -23,11 +23,6 @@ impl BaseMushafEngine {
 
     /// Find a verse in the mushaf and return its location (Verse, page, index_of_verse)
     fn find_verse(&self, sura_number: u8, verse_number: u16) -> Option<(&Verse, usize, usize)> {
-        //     for (verse_idx, v) in page.verses().iter().enumerate() {
-        //         if v.sura == sura && v.number == verse {
-        //             return Some((page_idx, verse_idx));
-        //         }
-        //     }
         let sura = self.metadata.get_sura_info(sura_number);
         if let Some(sura) = sura {
             let pages = self.mushaf.pages.as_ref();
@@ -39,15 +34,6 @@ impl BaseMushafEngine {
                     }
                 }
             }
-            // for (page_idx, page) in self.mushaf.pages[sura.start_page..=sura.end_page]
-            //     .iter()
-            //     .enumerate() {
-            //     for verse in page.verses().iter() {
-            //         if v.sura == sura && v.number == verse {
-            //             return Some((page_idx, verse_idx));
-            //         }
-            //     }
-            // }
             None
         } else {
             None

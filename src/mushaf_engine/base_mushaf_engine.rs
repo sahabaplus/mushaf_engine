@@ -74,7 +74,7 @@ impl IMushafEngine for BaseMushafEngine {
             _ => panic!("Verse Not Found!"),
         };
 
-        let mut remaining_lines = lines as f32;
+        let mut remaining_lines = lines;
 
         let (verse, page, verse_idx) = verse;
 
@@ -86,8 +86,7 @@ impl IMushafEngine for BaseMushafEngine {
             let current_verse = mushaf[page_idx].verses()[verse_idx];
             let verse_lines = self.calculate_verse_lines(&current_verse);
 
-            remaining_lines -= verse_lines;
-
+            remaining_lines = ((remaining_lines - verse_lines) * 100.0).round() / 100.0;
             // If we haven't reached our target yet, move to next verse
             if remaining_lines <= 0.0 {
                 break;

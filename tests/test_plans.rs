@@ -121,7 +121,8 @@ mod test {
     use std::{ path::PathBuf, rc::Rc };
     use rust_quran_engine::{
         king_fahad_mushaf::KingFahadMushaf,
-        mushaf_engine::{ base_mushaf_engine::BaseMushafEngine, Direction, IMushafEngine },
+        mushaf_engine::{ base_mushaf_engine::BaseMushafEngine, IMushafEngine },
+        navigation::Direction,
     };
 
     fn setup_engine() -> BaseMushafEngine {
@@ -146,22 +147,22 @@ mod test {
         let engine = setup_engine();
 
         let v = engine.navigate(15_f32, 114, 1, Direction::Upwards);
-        assert_eq!(v.sura, 112); // الإخلاص
-        assert_eq!(v.number, 4);
+        assert_eq!(v.verse.sura, 112); // الإخلاص
+        assert_eq!(v.verse.number, 4);
 
-        // println!("Verse: {}, {}", v, reverse_for_terminal(QURAN_SURAS[v.sura as usize]));
+        // println!("Verse: {}, {}", v, reverse_for_terminal(QURAN_SURAS[v.verse.sura as usize]));
 
         let v = engine.navigate(30_f32, 114, 1, Direction::Upwards);
-        assert_eq!(v.sura, 109); // الكافرون
-        assert_eq!(v.number, 6);
+        assert_eq!(v.verse.sura, 109); // الكافرون
+        assert_eq!(v.verse.number, 6);
 
         let v = engine.navigate(45_f32, 114, 1, Direction::Upwards);
-        assert_eq!(v.sura, 106); // قريش
-        assert_eq!(v.number, 4);
+        assert_eq!(v.verse.sura, 106); // قريش
+        assert_eq!(v.verse.number, 4);
 
         let v = engine.navigate(15_f32, 108, 1, Direction::Upwards);
-        assert_eq!(v.sura, 106); // قريش
-        assert_eq!(v.number, 4);
+        assert_eq!(v.verse.sura, 106); // قريش
+        assert_eq!(v.verse.number, 4);
     }
 
     #[test]
@@ -169,20 +170,20 @@ mod test {
         let engine = setup_engine();
 
         let v = engine.navigate(15_f32, 2, 6, Direction::Downwards);
-        assert_eq!(v.sura, 2);
-        assert_eq!(v.number, 16);
+        assert_eq!(v.verse.sura, 2);
+        assert_eq!(v.verse.number, 16);
 
         let v = engine.navigate(30_f32, 2, 6, Direction::Downwards);
-        assert_eq!(v.sura, 2);
-        assert_eq!(v.number, 24);
+        assert_eq!(v.verse.sura, 2);
+        assert_eq!(v.verse.number, 24);
 
         let v = engine.navigate(15_f32, 2, 16, Direction::Downwards);
-        assert_eq!(v.sura, 2);
-        assert_eq!(v.number, 24);
+        assert_eq!(v.verse.sura, 2);
+        assert_eq!(v.verse.number, 24);
 
         let v = engine.navigate(30_f32, 4, 171, Direction::Downwards);
-        println!("Verse: {}, {}", v, reverse_for_terminal(QURAN_SURAS[v.sura as usize]));
-        assert_eq!(v.sura, 5); // قريش
-        assert_eq!(v.number, 2);
+        println!("Verse: {:?}, {}", v, reverse_for_terminal(QURAN_SURAS[v.verse.sura as usize]));
+        assert_eq!(v.verse.sura, 5); // قريش
+        assert_eq!(v.verse.number, 2);
     }
 }

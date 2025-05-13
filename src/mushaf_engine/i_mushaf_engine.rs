@@ -1,5 +1,4 @@
-use crate::mushaf::Verse;
-use super::direction::Direction;
+use crate::{ mushaf::Verse, navigation::{ Direction, NavigationResult } };
 
 /// Interface for navigation within a Quran Mushaf
 ///
@@ -20,5 +19,11 @@ pub trait IMushafEngine {
     ///
     /// # Returns
     /// A reference to the verse at the destination after navigation
-    fn navigate(&self, lines: f32, from_sura: u8, from_verse: u16, direction: Direction) -> &Verse;
+    fn navigate(
+        &self,
+        lines: f32,
+        from_sura: u8,
+        from_verse: u16,
+        direction: Direction
+    ) -> NavigationResult;
 }

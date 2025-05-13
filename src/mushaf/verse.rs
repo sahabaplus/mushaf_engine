@@ -45,12 +45,6 @@ impl std::hash::Hash for Verse {
         // are f32 which doesn't implement Hash
         self.sura.hash(state);
         self.number.hash(state);
-
-        // If you want to hash position and lines, you'd need to convert them
-        // For example:
-        self.position.0.to_bits().hash(state);
-        self.position.1.hash(state);
-        self.lines.to_bits().hash(state);
     }
 }
 
@@ -61,7 +55,7 @@ impl std::fmt::Display for Verse {
         {
             write!(
                 f,
-                "{} {:3} {} {:4} {} {:12} {} {}",
+                "{} {:6} {} {:4} {} {:12} {} {}",
                 "Sura:".black(),
                 self.sura.to_string().yellow().bold(),
                 "Ayah:".black(),
@@ -98,6 +92,33 @@ impl Verse {
             number,
             position,
             lines,
+        }
+    }
+
+    /// Check if the verse is the last of the page
+    ///
+    /// # Returns
+    /// `true` if the verse is the last of the page, `false` otherwise
+    pub fn is_last_of_page(&self) -> bool {
+        self.position.1 == 15
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_last_of_page() {
+        let verse = Verse::new(1, 1, (0.0, 15), 1.0);
+        assert!(verse.is_last_of_page());
+    }
+
+    #[test]
+    fn test_is_not_last_of_page() {
+        for i in 1..15 {
+            let verse = Verse::new(1, 1, (0.0, i), 1.0);
+            assert!(!verse.is_last_of_page());
         }
     }
 }

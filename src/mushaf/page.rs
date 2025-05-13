@@ -9,7 +9,7 @@ use colored::Colorize;
 ///
 /// Contains the page number and all verses that appear on this page,
 /// with their positions and metadata.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Page {
     /// Page number (1-indexed)
     number: u16,
@@ -50,26 +50,25 @@ impl Page {
     }
 }
 
-#[cfg(not(feature = "colored_output"))]
-impl std::fmt::Debug for Verse {
+// Add Display implementation for Page
+impl std::fmt::Display for Page {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Verse")
-            .field("sura", &self.sura)
-            .field("number", &self.number)
-            .field("position", &self.position)
-            .field("lines", &self.lines)
-            .finish()
-    }
-}
+        #[cfg(feature = "colored_output")]
+        {
+            write!(f, "Page {}\n", self.number.to_string().yellow().bold())?;
 
-#[cfg(feature = "colored_output")]
-impl Debug for Page {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}\n", "Page:".bright_green().bold(), self.number.to_string().yellow());
+            for (i, verse) in self.verses.iter().enumerate() {
+                write!(f, "  {:2}- {}\n", i + 1, verse)?;
+            }
+        }
 
-        write!(f, "\t{}\n", "Verses:".bright_green().bold());
-        for (i, verse) in self.verses.iter().enumerate() {
-            write!(f, "\t\t{:2}- {}\n", (i + 1).to_string().blue(), verse);
+        #[cfg(not(feature = "colored_output"))]
+        {
+            write!(f, "Page {}\n", self.number)?;
+
+            for (i, verse) in self.verses.iter().enumerate() {
+                write!(f, "  {}. {}\n", i + 1, verse)?;
+            }
         }
 
         Ok(())

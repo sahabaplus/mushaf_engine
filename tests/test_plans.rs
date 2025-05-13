@@ -177,7 +177,7 @@ mod test {
         assert_eq!(v.verse.sura, 2);
         assert_eq!(v.verse.number, 24);
 
-        let v = engine.navigate(15_f32, 2, 16, Direction::Downwards);
+        let v = engine.navigate(15_f32, 2, 17, Direction::Downwards);
         assert_eq!(v.verse.sura, 2);
         assert_eq!(v.verse.number, 24);
 

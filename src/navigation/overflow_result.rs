@@ -44,7 +44,7 @@ impl std::fmt::Display for OverflowResult {
                 "Overflow lines:".black(),
                 self.overflow_lines.to_string().red().bold(),
                 "Verse:".black(),
-                self.overflowed_verse.to_string()
+                self.overflowed_verse
             )
         }
 

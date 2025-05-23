@@ -130,7 +130,7 @@ mod test {
         data_path.push("data");
         data_path.push("king_fahad_mushaf.json");
 
-        let mushaf = Rc::new(KingFahadMushaf::new(data_path.to_str().unwrap()));
+        let mushaf = Rc::new(KingFahadMushaf::from_file(data_path.to_str().unwrap()));
         BaseMushafEngine::new(mushaf)
     }
 

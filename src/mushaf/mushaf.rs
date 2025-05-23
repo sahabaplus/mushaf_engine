@@ -57,16 +57,16 @@ impl Display for Mushaf {
         #[cfg(feature = "colored_output")]
         {
             write!(f, "{}", "=== Mushaf Summary ===\n".bright_green().bold());
-            write!(f, "{}: {}\n", "Total Pages".yellow(), self.max_page.to_string().cyan());
-            write!(
+            writeln!(f, "{}: {}", "Total Pages".yellow(), self.max_page.to_string().cyan());
+            writeln!(
                 f,
-                "{}: {}\n",
+                "{}: {}",
                 "Lines per Page".yellow(),
                 self.lines_per_page.to_string().cyan()
             );
-            write!(
+            writeln!(
                 f,
-                "{}: {}\n",
+                "{}: {}",
                 "Total Verses".yellow(),
                 self.pages
                     .iter()

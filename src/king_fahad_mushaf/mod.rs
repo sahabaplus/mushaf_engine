@@ -6,7 +6,7 @@ use super::*;
 
 pub struct KingFahadMushaf;
 impl KingFahadMushaf {
-    pub fn new(path: &str) -> Mushaf {
+    pub fn from_file(path: &str) -> Mushaf {
         // Load from provided JSON path
         let file_content = std::fs::read_to_string(path).expect("Failed to read mushaf data file");
 
@@ -71,7 +71,7 @@ mod test {
         data_path.push("data");
         data_path.push("king_fahad_mushaf.json");
 
-        let mushaf = KingFahadMushaf::new(data_path.to_str().unwrap());
+        let mushaf = KingFahadMushaf::from_file(data_path.to_str().unwrap());
 
         // Add some assertions to actually test something
         assert!(mushaf.max_page > 0);

@@ -50,7 +50,7 @@ impl std::fmt::Display for LastVerseResult {
                 "Lines distance:".black(),
                 lines_color,
                 "Verse:".black(),
-                self.last_verse.to_string()
+                self.last_verse
             )
         }
 

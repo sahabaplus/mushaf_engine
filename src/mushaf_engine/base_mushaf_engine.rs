@@ -127,9 +127,9 @@ impl BaseMushafEngine {
             last_of_sura.is_some() &&
             last_of_sura.as_ref().unwrap().lines_distance.abs() + 3.0 < lines_distance.abs() // added 3 to prefer the new last
         {
-            return last_of_sura.unwrap();
+            last_of_sura.unwrap()
         } else {
-            return LastVerseResult::new(lines_distance, *last_verse);
+            LastVerseResult::new(lines_distance, *last_verse)
         }
     }
     fn prefer_last_of_page(
@@ -159,9 +159,9 @@ impl BaseMushafEngine {
             last_of_page.is_some() &&
             last_of_page.as_ref().unwrap().lines_distance.abs() + 1.0 < lines_distance.abs() // added 1 to prefer the new last
         {
-            return last_of_page;
+            last_of_page
         } else {
-            return Some(LastVerseResult::new(lines_distance, *new_last_of_page));
+            Some(LastVerseResult::new(lines_distance, *new_last_of_page))
         }
     }
 }
@@ -257,7 +257,7 @@ mod tests {
         data_path.push("data");
         data_path.push("king_fahad_mushaf.json");
 
-        let mushaf = Rc::new(KingFahadMushaf::new(data_path.to_str().unwrap()));
+        let mushaf = Rc::new(KingFahadMushaf::from_file(data_path.to_str().unwrap()));
         BaseMushafEngine::new(mushaf)
     }
 

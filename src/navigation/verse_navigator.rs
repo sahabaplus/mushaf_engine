@@ -113,7 +113,7 @@ impl VersesNavigator {
         self.current_verse_idx = current_verse_idx;
         self.current_page_idx = current_page_idx;
 
-        return Some(self.current_verse());
+        Some(self.current_verse())
     }
 
     /// Find a verse in the mushaf and return its location (Verse, page, index_of_verse)
@@ -170,7 +170,7 @@ mod test {
         data_path.push("data");
         data_path.push("king_fahad_mushaf.json");
 
-        let mushaf = Rc::new(KingFahadMushaf::new(data_path.to_str().unwrap()));
+        let mushaf = Rc::new(KingFahadMushaf::from_file(data_path.to_str().unwrap()));
         let metadata = Rc::new(QuranMetadata::from_mushaf(&mushaf));
 
         (mushaf, metadata)
@@ -236,7 +236,7 @@ mod test {
 
         let mut current_verse = pages[0].verses()[0];
         navigator.reset_position(114, 1);
-        for i in 1..=114 as u8 {
+        for i in 1..=114_u8 {
             let sura_number = 114 - i + 1;
             let sura = metadata.get_sura_info(sura_number).expect("Invalid sura number");
             for page_number in sura.start_page..=sura.end_page {

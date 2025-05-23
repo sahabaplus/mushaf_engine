@@ -55,10 +55,10 @@ impl std::fmt::Display for Page {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(feature = "colored_output")]
         {
-            write!(f, "Page {}\n", self.number.to_string().yellow().bold())?;
+            writeln!(f, "Page {}", self.number.to_string().yellow().bold())?;
 
             for (i, verse) in self.verses.iter().enumerate() {
-                write!(f, "  {:2}- {}\n", i + 1, verse)?;
+                writeln!(f, "  {:2}- {}", i + 1, verse)?;
             }
         }
 

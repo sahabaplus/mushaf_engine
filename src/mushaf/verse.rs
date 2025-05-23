@@ -24,20 +24,6 @@ pub struct Verse {
 // they are considered equal
 impl Eq for Verse {}
 
-// Implement Ord for full comparison capability
-impl Ord for Verse {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // First compare sura
-        match self.sura.cmp(&other.sura) {
-            Ordering::Equal => {
-                // If sura is the same, compare ayah number
-                self.number.cmp(&other.number)
-            }
-            ordering => ordering,
-        }
-    }
-}
-
 // Implement Hash for using Verse in HashMaps or HashSets
 impl std::hash::Hash for Verse {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

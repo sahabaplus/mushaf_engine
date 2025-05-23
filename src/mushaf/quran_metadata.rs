@@ -137,7 +137,7 @@ mod tests {
         data_path.push("data");
         data_path.push("king_fahad_mushaf.json");
 
-        let mushaf = KingFahadMushaf::new(data_path.to_str().unwrap());
+        let mushaf = KingFahadMushaf::from_file(data_path.to_str().unwrap());
         QuranMetadata::from_mushaf(&mushaf)
     }
 

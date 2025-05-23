@@ -1,0 +1,13 @@
+{
+  "cSpell.words": ["Baqarah", "bismillah", "Fatiha", "Mushaf", "Tawbah"],
+  "cSpell.ignorePaths": [
+    "package-lock.json",
+    "node_modules",
+    "vscode-extension",
+    ".git/{info,lfs,logs,refs,objects}/**",
+    ".git/{index,*refs,*HEAD}",
+    ".vscode",
+    ".vscode-insiders",
+    "/tests/test_plans.rs"
+  ]
+}

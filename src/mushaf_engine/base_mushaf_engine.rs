@@ -28,7 +28,10 @@ impl BaseMushafEngine {
     #[must_use]
     pub fn new(mushaf: Rc<Mushaf>) -> Self {
         let quran_metadata = Rc::new(QuranMetadata::from_mushaf(&mushaf));
-        let navigator = VersesNavigator::new(mushaf.clone(), quran_metadata.clone());
+        let navigator = VersesNavigator::builder(
+            mushaf.clone(),
+            quran_metadata.clone()
+        );
         Self { mushaf, quran_metadata, navigator }
     }
 
@@ -130,6 +133,14 @@ impl BaseMushafEngine {
 
         Some(LastVerseResult::new(lines_distance, *new_last_of_page))
     }
+
+    fn create_navigator(
+        &self,
+        settings: NavigationSettings,
+        direction: Direction
+    ) -> VersesNavigator {
+        VersesNavigator::new(self.mushaf.clone(), self.quran_metadata.clone(), settings, direction)
+    }
 }
 
 impl IMushafEngine for BaseMushafEngine {
@@ -160,7 +171,7 @@ impl IMushafEngine for BaseMushafEngine {
 
         let mut remaining_lines = lines;
 
-        let mut navigator = VersesNavigator::new(self.mushaf.clone(), self.quran_metadata.clone());
+        let mut navigator = self.create_navigator(settings, direction);
         navigator.reset_position(verse.sura, verse.number);
 
         let mut overflow: Option<OverflowResult> = None;
@@ -174,10 +185,7 @@ impl IMushafEngine for BaseMushafEngine {
             let current_sura_info = self.quran_metadata
                 .get_sura_info(current_verse.sura)
                 .expect("Current verse sura should exist");
-            let verse_lines = navigator.calculate_verse_lines(
-                current_verse,
-                settings.ignore_sura_header
-            );
+            let verse_lines = navigator.calculate_verse_lines(current_verse);
             let diff = ((remaining_lines - verse_lines) * 100.0).round() / 100.0;
 
             if current_verse.is_last_of_page() {
@@ -197,7 +205,7 @@ impl IMushafEngine for BaseMushafEngine {
             previous_verse = *current_verse;
 
             if remaining_lines > 0.0 {
-                navigator.next_verse(direction);
+                navigator.next_verse();
             } else {
                 break;
             }
@@ -252,20 +260,17 @@ impl IMushafEngine for BaseMushafEngine {
             .find_verse(end_sura, end_verse)
             .map_err(|_| CalculatingLinesError::WrongBoundary)?.0;
 
-        let mut navigator = VersesNavigator::new(self.mushaf.clone(), self.quran_metadata.clone());
+        let mut navigator = self.create_navigator(settings, direction);
         navigator.reset_position(start_verse_data.sura, start_verse_data.number);
 
         let mut lines = 0.0;
         loop {
-            let verse_lines = navigator.calculate_verse_lines(
-                navigator.current_verse(),
-                settings.ignore_sura_header
-            );
+            let verse_lines = navigator.calculate_verse_lines(navigator.current_verse());
             lines = ((lines + verse_lines) * 100.0).round() / 100.0;
-            if *navigator.current_verse() == *end_verse_data {
+            if navigator.current_verse() == end_verse_data {
                 break;
             }
-            navigator.next_verse(direction);
+            navigator.next_verse();
         }
 
         Ok(lines)
@@ -278,9 +283,9 @@ impl IMushafEngine for BaseMushafEngine {
         direction: Direction,
         settings: NavigationSettings
     ) -> Option<Verse> {
-        let mut navigator = VersesNavigator::new(self.mushaf.clone(), self.quran_metadata.clone());
+        let mut navigator = self.create_navigator(settings, direction);
         navigator.reset_position(sura_number, verse_number);
-        navigator.next_verse(direction).copied()
+        navigator.next_verse().copied()
     }
 }
 #[cfg(test)]

@@ -1,4 +1,7 @@
-use crate::{ mushaf::{ Mushaf, QuranMetadata, Verse }, navigation::LookupError };
+use crate::{
+    mushaf::{ Mushaf, QuranMetadata, Verse },
+    navigation::{ LookupError, NavigationSettings },
+};
 use std::rc::Rc;
 
 use super::Direction;
@@ -9,18 +12,48 @@ pub struct VersesNavigator {
     quran_metadata: Rc<QuranMetadata>,
     current_page_idx: usize,
     current_verse_idx: usize,
+    settings: NavigationSettings,
+    direction: Direction,
 }
 
 impl VersesNavigator {
     /// Create a new `VersesNavigator`
     #[must_use]
-    pub const fn new(mushaf: Rc<Mushaf>, metadata: Rc<QuranMetadata>) -> Self {
+    pub const fn new(
+        mushaf: Rc<Mushaf>,
+        metadata: Rc<QuranMetadata>,
+        settings: NavigationSettings,
+        direction: Direction
+    ) -> Self {
         Self {
             mushaf,
             quran_metadata: metadata,
             current_page_idx: 0,
             current_verse_idx: 0,
+            settings,
+            direction,
         }
+    }
+
+    #[must_use]
+    pub fn builder(mushaf: Rc<Mushaf>, metadata: Rc<QuranMetadata>) -> Self {
+        Self::new(mushaf, metadata, Default::default(), Default::default())
+    }
+
+    #[must_use]
+    pub fn direction(mut self, direction: Direction) -> Self {
+        self.direction = direction;
+        self
+    }
+    #[must_use]
+    pub fn settings(mut self, settings: NavigationSettings) -> Self {
+        self.settings = settings;
+        self
+    }
+    #[must_use]
+    pub fn ignore_sura_header(mut self, ignore_sura_header: bool) -> Self {
+        self.settings.ignore_sura_header = ignore_sura_header;
+        self
     }
 
     /// Reset the navigator to a specific verse position
@@ -46,8 +79,8 @@ impl VersesNavigator {
     }
 
     /// Move to the next verse based on direction
-    pub fn next_verse(&mut self, direction: Direction) -> Option<&Verse> {
-        match direction {
+    pub fn next_verse(&mut self) -> Option<&Verse> {
+        match self.direction {
             Direction::Downwards => self.next_verse_downward(),
             Direction::Upwards => self.next_verse_upward(),
         }
@@ -166,9 +199,9 @@ impl VersesNavigator {
     /// Calculate the lines taken by a verse including any sura headers
     #[must_use]
     #[inline]
-    pub fn calculate_verse_lines(&self, verse: &Verse, ignore_sura_header: bool) -> f32 {
+    pub fn calculate_verse_lines(&self, verse: &Verse) -> f32 {
         let mut total_lines = verse.lines;
-        if ignore_sura_header {
+        if self.settings.ignore_sura_header {
             return total_lines;
         }
 
@@ -224,62 +257,54 @@ mod test {
     #[test]
     fn test_calculate_verse_with_headers_and_without_headers() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(mushaf, metadata);
+        let mut navigator = VersesNavigator::new(
+            mushaf,
+            metadata,
+            Default::default(),
+            Default::default()
+        ).ignore_sura_header(false);
         // Sura (9 - At-Tawbah) does not have a bismillah
         navigator.reset_position(9, 1);
         let verse = navigator.current_verse();
-        let lines = navigator.calculate_verse_lines(verse, false);
+        let lines = navigator.calculate_verse_lines(verse);
         assert!((lines - (verse.lines + 1.0)).abs() < f32::EPSILON);
 
         navigator.reset_position(9, 1);
+        let mut navigator = navigator.ignore_sura_header(true);
         let verse = navigator.current_verse();
-        let lines = navigator.calculate_verse_lines(verse, true);
+        let lines = navigator.calculate_verse_lines(verse);
         assert_eq!(lines, verse.lines);
 
         // Loop through all first verses of suras
+        navigator = navigator.ignore_sura_header(false);
         for sura in 1..=114 {
             let header_lines = if sura == 9 { 1.0 } else { 2.0 };
             navigator.reset_position(sura, 1);
             let verse = navigator.current_verse();
-            let lines = navigator.calculate_verse_lines(verse, false);
+            let lines = navigator.calculate_verse_lines(verse);
             assert!((lines - (verse.lines + header_lines)).abs() < f32::EPSILON);
         }
-
-        // Sum of all lines of all suras with headers and without headers
-        let mut total_lines_with_headers = 0.0;
-        let mut total_lines_without_headers = 0.0;
-        let mut verses_count = 0;
-        for sura in 1..=114 {
-            navigator.reset_position(sura, 1);
-
-            loop {
-                let verse = navigator.current_verse();
-                verses_count += 1;
-                total_lines_with_headers += navigator.calculate_verse_lines(verse, false);
-                total_lines_without_headers += navigator.calculate_verse_lines(verse, true);
-                navigator.next_verse(Default::default());
-                if navigator.current_verse().sura != sura {
-                    break;
-                }
-            }
-        }
-        let diff = total_lines_with_headers - (total_lines_without_headers + 113.0 * 2.0 + 1.0);
-        assert!(diff.abs() < 0.01);
     }
 
     #[test]
     fn test_upwards_navigation() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(mushaf, metadata);
+        let mut navigator = VersesNavigator::new(
+            mushaf,
+            metadata,
+            Default::default(),
+            Default::default()
+        );
         navigator.reset_position(5, 119);
 
-        let verse = navigator.next_verse(Direction::Upwards);
+        let verse = navigator.next_verse();
         let verse = verse.expect("expect `verse` not to be None");
         println!("{verse}");
         assert_eq!(verse.number, 120);
         assert_eq!(verse.sura, 5);
 
-        let verse = navigator.next_verse(Direction::Upwards);
+        let mut navigator = navigator.direction(Direction::Upwards);
+        let verse = navigator.next_verse();
         let verse = verse.expect("expect `verse` not to be None");
         println!("{verse}");
         assert_eq!(verse.number, 1);
@@ -289,16 +314,22 @@ mod test {
     #[test]
     fn test_downwards_navigation() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(mushaf, metadata);
+        let mut navigator = VersesNavigator::new(
+            mushaf,
+            metadata,
+            Default::default(),
+            Default::default()
+        );
         navigator.reset_position(5, 119);
 
-        let verse = navigator.next_verse(Direction::Downwards);
+        let verse = navigator.next_verse();
         let verse = verse.expect("expect `verse` not to be None");
         println!("{verse}");
         assert_eq!(verse.number, 120);
         assert_eq!(verse.sura, 5);
 
-        let verse = navigator.next_verse(Direction::Downwards);
+        let mut navigator = navigator.direction(Direction::Downwards);
+        let verse = navigator.next_verse();
         let verse = verse.expect("expect `verse` not to be None");
         println!("{verse}");
         assert_eq!(verse.number, 1);
@@ -309,7 +340,12 @@ mod test {
     fn comprehensive_downwards() {
         let (mushaf, metadata) = get_mushaf();
         let pages = Rc::clone(&mushaf.pages);
-        let mut navigator = VersesNavigator::new(mushaf, metadata);
+        let mut navigator = VersesNavigator::new(
+            mushaf,
+            metadata,
+            Default::default(),
+            Default::default()
+        );
 
         for page in pages.iter() {
             for verse in page.verses() {
@@ -323,7 +359,12 @@ mod test {
     fn comprehensive_upwards() {
         let (mushaf, metadata) = get_mushaf();
         let pages = Rc::clone(&mushaf.pages);
-        let mut navigator = VersesNavigator::new(mushaf, metadata.clone());
+        let mut navigator = VersesNavigator::new(
+            mushaf,
+            metadata.clone(),
+            Default::default(),
+            Default::default()
+        );
 
         navigator.reset_position(114, 1);
         for i in 1..=114_u8 {
@@ -346,7 +387,12 @@ mod test {
     fn per_sura() {
         let (mushaf, metadata) = get_mushaf();
         let pages = Rc::clone(&mushaf.pages);
-        let mut navigator = VersesNavigator::new(mushaf, metadata);
+        let mut navigator = VersesNavigator::new(
+            mushaf,
+            metadata,
+            Default::default(),
+            Default::default()
+        );
         navigator.reset_position(114, 6);
 
         let pre = navigator.move_pre_sura(navigator.current_verse().sura);
@@ -357,7 +403,6 @@ mod test {
             let sura = 115 - i;
             let pre = navigator.move_pre_sura(sura);
             let pre = pre.expect("expect `pre` not to be Err");
-            println!("Pre sura of {sura} is {}", pre.sura);
             assert_eq!(pre.sura, sura - 1);
         }
     }

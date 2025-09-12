@@ -159,7 +159,7 @@ mod test {
         let engine = setup_engine();
 
         let v = engine
-            .navigate(15_f32, 114, 1, Direction::Upwards)
+            .navigate(15_f32, 114, 1, Direction::Upwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 112); // الإخلاص
         assert_eq!(v.verse.number, 4);
@@ -167,19 +167,19 @@ mod test {
         // println!("Verse: {}, {}", v, reverse_for_terminal(QURAN_SURAS[v.verse.sura as usize]));
 
         let v = engine
-            .navigate(30_f32, 114, 1, Direction::Upwards)
+            .navigate(30_f32, 114, 1, Direction::Upwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 109); // الكافرون
         assert_eq!(v.verse.number, 6);
 
         let v = engine
-            .navigate(45_f32, 114, 1, Direction::Upwards)
+            .navigate(45_f32, 114, 1, Direction::Upwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 106); // قريش
         assert_eq!(v.verse.number, 4);
 
         let v = engine
-            .navigate(15_f32, 108, 1, Direction::Upwards)
+            .navigate(15_f32, 108, 1, Direction::Upwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 106); // قريش
         assert_eq!(v.verse.number, 4);
@@ -190,25 +190,25 @@ mod test {
         let engine = setup_engine();
 
         let v = engine
-            .navigate(15_f32, 2, 6, Direction::Downwards)
+            .navigate(15_f32, 2, 6, Direction::Downwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 2);
         assert_eq!(v.verse.number, 16);
 
         let v = engine
-            .navigate(30_f32, 2, 6, Direction::Downwards)
+            .navigate(30_f32, 2, 6, Direction::Downwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 2);
         assert_eq!(v.verse.number, 24);
 
         let v = engine
-            .navigate(15_f32, 2, 17, Direction::Downwards)
+            .navigate(15_f32, 2, 17, Direction::Downwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 2);
         assert_eq!(v.verse.number, 24);
 
         let v = engine
-            .navigate(30_f32, 4, 171, Direction::Downwards)
+            .navigate(30_f32, 4, 171, Direction::Downwards, Default::default())
             .expect("expect `navigate` to succeed");
         println!("Verse: {:?}, {}", v, reverse_for_terminal(QURAN_SURAS[v.verse.sura as usize]));
         assert_eq!(v.verse.sura, 5); // قريش

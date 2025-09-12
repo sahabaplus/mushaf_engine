@@ -8,6 +8,7 @@ use crate::{
         LookupError,
         NavigationError,
         NavigationResult,
+        NavigationSettings,
     },
 };
 
@@ -27,10 +28,11 @@ pub trait IMushafEngine {
     /// * `from_sura` - Starting Sura number (1-114)
     /// * `from_verse` - Starting verse number within the sura
     /// * `direction` - Direction to navigate (Forward or Backward)
+    /// * `settings` - Navigation settings
     ///
     /// # Returns
     /// A reference to the verse at the destination after navigation
-    /// 
+    ///
     /// # Errors
     /// * `NavigationError::NegativeLines` if the number of lines is negative
     /// * `NavigationError::InvalidVerse` if the starting verse is invalid
@@ -43,7 +45,8 @@ pub trait IMushafEngine {
         lines: f32,
         from_sura: u8,
         from_verse: u16,
-        direction: Direction
+        direction: Direction,
+        settings: NavigationSettings
     ) -> Result<NavigationResult, NavigationError>;
 
     /// Get metadata about a specific Sura
@@ -53,7 +56,7 @@ pub trait IMushafEngine {
     ///
     /// # Returns
     /// Information about the specified Sura, or None if not found
-    /// 
+    ///
     /// # Errors
     /// * `LookupError::InvalidSura` if the sura number is invalid
     /// * `LookupError::SuraNotFound` if the sura number is not found
@@ -67,10 +70,11 @@ pub trait IMushafEngine {
     /// * `end_sura` - End sura number
     /// * `end_verse` - End verse number
     /// * `direction` - Direction of navigation
+    /// * `settings` - Navigation settings
     ///
     /// # Returns
     /// Number of lines between the two verses
-    /// 
+    ///
     /// # Errors
     /// * `CalculatingLinesError::WrongBoundary` if the start and end verses are not in the same sura
     fn calculate_lines(
@@ -79,7 +83,8 @@ pub trait IMushafEngine {
         start_verse: u16,
         end_sura: u8,
         end_verse: u16,
-        direction: Direction
+        direction: Direction,
+        settings: NavigationSettings
     ) -> Result<f32, CalculatingLinesError>;
 
     /// Find the next verse from a given verse in the specified direction
@@ -88,8 +93,15 @@ pub trait IMushafEngine {
     /// * `sura_number` - Current sura number
     /// * `verse_number` - Current verse number
     /// * `direction` - Direction to navigate
+    /// * `settings` - Navigation settings
     ///
     /// # Returns
     /// The next verse or None if at the end
-    fn next_verse(&self, sura_number: u8, verse_number: u16, direction: Direction) -> Option<Verse>;
+    fn next_verse(
+        &self,
+        sura_number: u8,
+        verse_number: u16,
+        direction: Direction,
+        settings: NavigationSettings
+    ) -> Option<Verse>;
 }

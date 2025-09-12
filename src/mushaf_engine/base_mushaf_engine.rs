@@ -7,6 +7,7 @@ use crate::{
         LookupError,
         NavigationError,
         NavigationResult,
+        NavigationSettings,
         OverflowResult,
         VersesNavigator,
     },
@@ -51,7 +52,8 @@ impl BaseMushafEngine {
         &self,
         last_of_sura: Option<LastVerseResult>,
         current_verse: &Verse,
-        direction: Direction
+        direction: Direction,
+        settings: NavigationSettings
     ) -> LastVerseResult {
         if let Some(last_result) = &last_of_sura {
             if current_verse.sura == last_result.last_verse.sura {
@@ -73,7 +75,8 @@ impl BaseMushafEngine {
                     current_verse.number,
                     last_verse.sura,
                     last_verse.number,
-                    direction
+                    direction,
+                    settings
                 )
                 .expect("Lines calculation should succeed") - current_verse.lines;
 
@@ -90,7 +93,8 @@ impl BaseMushafEngine {
         &self,
         last_of_page: Option<LastVerseResult>,
         current_verse: &Verse,
-        direction: Direction
+        direction: Direction,
+        settings: NavigationSettings
     ) -> Option<LastVerseResult> {
         if let Some(existing_last) = &last_of_page {
             if *current_verse == existing_last.last_verse {
@@ -113,7 +117,8 @@ impl BaseMushafEngine {
                 current_verse.number,
                 new_last_of_page.sura,
                 new_last_of_page.number,
-                direction
+                direction,
+                settings
             )
             .ok()?;
 
@@ -133,7 +138,8 @@ impl IMushafEngine for BaseMushafEngine {
         lines: f32,
         from_sura: u8,
         from_verse: u16,
-        direction: Direction
+        direction: Direction,
+        settings: NavigationSettings
     ) -> Result<NavigationResult, NavigationError> {
         if lines < 0.0 {
             return Err(NavigationError::NegativeLines);
@@ -168,7 +174,10 @@ impl IMushafEngine for BaseMushafEngine {
             let current_sura_info = self.quran_metadata
                 .get_sura_info(current_verse.sura)
                 .expect("Current verse sura should exist");
-            let verse_lines = navigator.calculate_verse_lines(current_verse);
+            let verse_lines = navigator.calculate_verse_lines(
+                current_verse,
+                settings.ignore_sura_header
+            );
             let diff = ((remaining_lines - verse_lines) * 100.0).round() / 100.0;
 
             if current_verse.is_last_of_page() {
@@ -194,8 +203,18 @@ impl IMushafEngine for BaseMushafEngine {
             }
         }
 
-        let last_of_sura = self.prefer_last_of_sura(last_of_sura, &previous_verse, direction);
-        let last_of_page = self.prefer_last_of_page(last_of_page, &previous_verse, direction);
+        let last_of_sura = self.prefer_last_of_sura(
+            last_of_sura,
+            &previous_verse,
+            direction,
+            settings
+        );
+        let last_of_page = self.prefer_last_of_page(
+            last_of_page,
+            &previous_verse,
+            direction,
+            settings
+        );
 
         Ok(
             NavigationResult::new(
@@ -218,7 +237,8 @@ impl IMushafEngine for BaseMushafEngine {
         start_verse: u16,
         end_sura: u8,
         end_verse: u16,
-        direction: Direction
+        direction: Direction,
+        settings: NavigationSettings
     ) -> Result<f32, CalculatingLinesError> {
         let is_wrong_direction = Self::is_wrong_direction(start_sura, end_sura, direction);
         if is_wrong_direction || (start_sura == end_sura && start_verse > end_verse) {
@@ -237,7 +257,11 @@ impl IMushafEngine for BaseMushafEngine {
 
         let mut lines = 0.0;
         loop {
-            lines = ((lines + navigator.current_verse().lines) * 100.0).round() / 100.0;
+            let verse_lines = navigator.calculate_verse_lines(
+                navigator.current_verse(),
+                settings.ignore_sura_header
+            );
+            lines = ((lines + verse_lines) * 100.0).round() / 100.0;
             if *navigator.current_verse() == *end_verse_data {
                 break;
             }
@@ -251,7 +275,8 @@ impl IMushafEngine for BaseMushafEngine {
         &self,
         sura_number: u8,
         verse_number: u16,
-        direction: Direction
+        direction: Direction,
+        settings: NavigationSettings
     ) -> Option<Verse> {
         let mut navigator = VersesNavigator::new(self.mushaf.clone(), self.quran_metadata.clone());
         navigator.reset_position(sura_number, verse_number);
@@ -294,7 +319,7 @@ mod tests {
         let engine = setup_engine();
         let lines = 15.1f32;
         let result = engine
-            .navigate(lines, 5, 3, Direction::Upwards)
+            .navigate(lines, 5, 3, Direction::Upwards, Default::default())
             .expect("expect `navigate` to succeed");
         println!("{:16}{}", "Lines: ".bold().cyan(), lines.to_string().yellow().bold());
         println!("{result}");
@@ -326,7 +351,7 @@ mod tests {
         let engine = setup_engine();
 
         let v = engine
-            .navigate(14.7f32, 114, 1, Direction::Upwards)
+            .navigate(14.7f32, 114, 1, Direction::Upwards, Default::default())
             .expect("expect `navigate` to succeed");
 
         println!("{v}");
@@ -346,7 +371,7 @@ mod tests {
 
         // First verse of Al-Fatiha
         let result = engine
-            .navigate(0.0, 1, 1, Direction::Downwards)
+            .navigate(0.0, 1, 1, Direction::Downwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(result.verse.sura, 1);
         assert_eq!(result.verse.number, 1);
@@ -355,9 +380,7 @@ mod tests {
     #[test]
     fn calculating_lines() {
         let engine = setup_engine();
-        // let navigator = VersesNavigator::new(engine.mushaf.clone(), engine.quran_metadata.clone());
-        let lines = engine.calculate_lines(1, 1, 114, 6, Direction::Downwards);
+        let lines = engine.calculate_lines(1, 1, 114, 6, Direction::Downwards, Default::default());
         assert!(lines.is_ok());
-        // assert_eq!(lines, engine.)
     }
 }

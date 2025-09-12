@@ -67,6 +67,7 @@ impl VersesNavigator {
 
             // Check if we've reached the end of the mushaf
             if self.current_page_idx >= mushaf.len() {
+                self.current_page_idx -= 1; // Back to last page.
                 // Select last verse of quran
                 // self.current_page_idx = mushaf.len() - 1;
                 // self.current_verse_idx = mushaf[self.current_page_idx].verses().len() - 1;
@@ -164,8 +165,12 @@ impl VersesNavigator {
 
     /// Calculate the lines taken by a verse including any sura headers
     #[must_use]
-    pub fn calculate_verse_lines(&self, verse: &Verse) -> f32 {
+    #[inline]
+    pub fn calculate_verse_lines(&self, verse: &Verse, ignore_sura_header: bool) -> f32 {
         let mut total_lines = verse.lines;
+        if ignore_sura_header {
+            return total_lines;
+        }
 
         // Add lines for sura headers if this is the first verse of a sura
         if verse.number == 1 {
@@ -214,6 +219,52 @@ mod test {
         let metadata = Rc::new(QuranMetadata::from_mushaf(&mushaf));
 
         (mushaf, metadata)
+    }
+
+    #[test]
+    fn test_calculate_verse_with_headers_and_without_headers() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator = VersesNavigator::new(mushaf, metadata);
+        // Sura (9 - At-Tawbah) does not have a bismillah
+        navigator.reset_position(9, 1);
+        let verse = navigator.current_verse();
+        let lines = navigator.calculate_verse_lines(verse, false);
+        assert!((lines - (verse.lines + 1.0)).abs() < f32::EPSILON);
+
+        navigator.reset_position(9, 1);
+        let verse = navigator.current_verse();
+        let lines = navigator.calculate_verse_lines(verse, true);
+        assert_eq!(lines, verse.lines);
+
+        // Loop through all first verses of suras
+        for sura in 1..=114 {
+            let header_lines = if sura == 9 { 1.0 } else { 2.0 };
+            navigator.reset_position(sura, 1);
+            let verse = navigator.current_verse();
+            let lines = navigator.calculate_verse_lines(verse, false);
+            assert!((lines - (verse.lines + header_lines)).abs() < f32::EPSILON);
+        }
+
+        // Sum of all lines of all suras with headers and without headers
+        let mut total_lines_with_headers = 0.0;
+        let mut total_lines_without_headers = 0.0;
+        let mut verses_count = 0;
+        for sura in 1..=114 {
+            navigator.reset_position(sura, 1);
+
+            loop {
+                let verse = navigator.current_verse();
+                verses_count += 1;
+                total_lines_with_headers += navigator.calculate_verse_lines(verse, false);
+                total_lines_without_headers += navigator.calculate_verse_lines(verse, true);
+                navigator.next_verse(Default::default());
+                if navigator.current_verse().sura != sura {
+                    break;
+                }
+            }
+        }
+        let diff = total_lines_with_headers - (total_lines_without_headers + 113.0 * 2.0 + 1.0);
+        assert!(diff.abs() < 0.01);
     }
 
     #[test]

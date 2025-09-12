@@ -13,10 +13,10 @@ pub struct Verse {
     pub sura: u8,
     /// Number of the verse within its sura
     pub number: u16,
-    /// Position on the page as (x position 0.0-1.0, line number 1-15)
-    pub position: (f32, u8),
     /// Number of lines this verse spans (can be fractional)
     pub lines: f32,
+    /// Position on the page as (x position 0.0-1.0, line number 1-15)
+    pub position: (f32, u8),
 }
 
 // Implement Eq - we can do this because we've already implemented PartialEq
@@ -72,12 +72,13 @@ impl Verse {
     ///
     /// # Returns
     /// A new Verse instance
-    pub fn new(sura: u8, number: u16, position: (f32, u8), lines: f32) -> Self {
+    #[must_use]
+    pub const fn new(sura: u8, number: u16, position: (f32, u8), lines: f32) -> Self {
         Self {
             sura,
             number,
-            position,
             lines,
+            position,
         }
     }
 
@@ -85,7 +86,8 @@ impl Verse {
     ///
     /// # Returns
     /// `true` if the verse is the last of the page, `false` otherwise
-    pub fn is_last_of_page(&self) -> bool {
+    #[must_use]
+    pub const fn is_last_of_page(&self) -> bool {
         self.position.1 == 15
     }
 }

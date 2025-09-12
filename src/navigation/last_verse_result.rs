@@ -17,16 +17,17 @@ pub struct LastVerseResult {
 }
 
 impl LastVerseResult {
-    /// Create a new LastVerseResult with specified parameters
+    /// Create a new `LastVerseResult` with specified parameters
     ///
     /// # Arguments
     /// * `lines_distance` - Distance of lines available for navigation (negative indicates overflow)
     /// * `last_verse` - Reference to the last verse of the page or sura
     ///
     /// # Returns
-    /// A new LastVerseResult instance
-    pub fn new(lines_distance: f32, last_verse: Verse) -> LastVerseResult {
-        LastVerseResult {
+    /// A new `LastVerseResult` instance
+    #[must_use]
+    pub const fn new(lines_distance: f32, last_verse: Verse) -> Self {
+        Self {
             lines_distance,
             last_verse,
         }

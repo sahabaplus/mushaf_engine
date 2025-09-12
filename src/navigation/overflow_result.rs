@@ -17,16 +17,17 @@ pub struct OverflowResult {
 }
 
 impl OverflowResult {
-    /// Create a new OverflowResult with specified parameters
+    /// Create a new `OverflowResult` with specified parameters
     ///
     /// # Arguments
     /// * `overflow_lines` - Number of lines that overflowed beyond the boundary
     /// * `overflowed_verse` - Reference to the verse at the boundary where overflow occurred
     ///
     /// # Returns
-    /// A new OverflowResult instance
-    pub fn new(overflow_lines: f32, overflowed_verse: Verse) -> OverflowResult {
-        OverflowResult {
+    /// A new `OverflowResult` instance
+    #[must_use]
+    pub const fn new(overflow_lines: f32, overflowed_verse: Verse) -> Self {
+        Self {
             overflow_lines,
             overflowed_verse,
         }

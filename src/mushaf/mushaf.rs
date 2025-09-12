@@ -26,7 +26,8 @@ impl Mushaf {
     /// * `lines_per_page` - Number of lines on each page in this Mushaf edition
     /// * `max_page` - Total number of pages in this Mushaf edition
     /// * `pages` - Reference-counted slice containing all pages
-    pub fn new(lines_per_page: u8, max_page: u16, pages: Rc<[Page]>) -> Self {
+    #[must_use]
+    pub const fn new(lines_per_page: u8, max_page: u16, pages: Rc<[Page]>) -> Self {
         Self {
             lines_per_page,
             max_page,
@@ -41,7 +42,8 @@ impl Mushaf {
     ///
     /// # Returns
     /// * `Some(&Page)` - Reference to the requested page if it exists
-    /// * `None` - If the page number is 0 or exceeds max_page
+    /// * `None` - If the page number is 0 or exceeds `max_page`
+    #[must_use]
     pub fn get_page(&self, page_number: u16) -> Option<&Page> {
         if page_number == 0 || page_number > self.max_page {
             return None;

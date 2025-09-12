@@ -6,22 +6,51 @@ use super::*;
 
 pub struct KingFahadMushaf;
 impl KingFahadMushaf {
-    pub fn from_file(path: &str) -> Mushaf {
+    /// Load a King Fahad Mushaf from a file
+    ///
+    /// # Arguments
+    /// * `path` - The path to the JSON file containing the Mushaf data
+    ///
+    /// # Returns
+    /// A `Result` containing the `Mushaf` if successful, or an `std::io::Error` if the file cannot be read or parsed
+    ///
+    /// # Errors
+    /// * `std::io::Error` if the file cannot be read or parsed
+    /// * `serde::de::Error` if the JSON is invalid
+    pub fn from_file(path: &str) -> Result<Mushaf, std::io::Error> {
         // Load from provided JSON path
-        let file_content = std::fs::read_to_string(path).expect("Failed to read mushaf data file");
+        let file_content = std::fs
+            ::read_to_string(path)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
         let pages: Vec<Vec<JsonVerse>> = serde_json
             ::from_str(&file_content)
-            .expect("Failed to parse mushaf JSON data");
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-        Self::create_mushaf_from_pages(pages)
+        Ok(Self::create_mushaf_from_pages(pages))
     }
 
-    fn create_mushaf_from_pages(json_pages: Vec<Vec<JsonVerse>>) -> Mushaf {
+    /// Create a Mushaf from a vector of JSON pages
+    ///
+    /// # Arguments
+    /// * `json_pages` - A vector of JSON pages
+    ///
+    /// # Returns
+    /// A `Result` containing the `Mushaf` if successful, or an `std::io::Error` if the pages cannot be created
+    ///
+    /// # Errors
+    /// * `std::io::Error` if the pages cannot be created
+    /// * `serde::de::Error` if the JSON is invalid
+    ///
+    /// # Panics
+    /// * `expect` if the page number cannot be converted to a `u16`
+    #[must_use]
+    pub fn create_mushaf_from_pages(json_pages: Vec<Vec<JsonVerse>>) -> Mushaf {
         let mut pages = Vec::with_capacity(json_pages.len());
 
         for (i, page_verses) in json_pages.into_iter().enumerate() {
-            let page_number: u16 = (i as u16) + 1;
+            let i = u16::try_from(i).expect("expect `i` to be less than `u16::MAX`");
+            let page_number: u16 = i + 1;
 
             // Create a Vec<Verse> first
             let verses: Vec<Verse> = page_verses
@@ -42,14 +71,16 @@ impl KingFahadMushaf {
 
         Mushaf {
             lines_per_page: 15,
-            max_page: pages.len() as u16,
+            max_page: u16
+                ::try_from(pages.len())
+                .expect("expect `pages.len()` to be less than `u16::MAX`"),
             pages: Rc::from(pages),
         }
     }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Copy)]
-struct JsonVerse {
+pub struct JsonVerse {
     sura: u8,
     ayah: u16,
     lines: f32,
@@ -71,7 +102,10 @@ mod test {
         data_path.push("data");
         data_path.push("king_fahad_mushaf.json");
 
-        let mushaf = KingFahadMushaf::from_file(data_path.to_str().unwrap());
+        let mushaf = KingFahadMushaf::from_file(
+            data_path.to_str().expect("expect `data_path` to be a valid string")
+        );
+        let mushaf = mushaf.expect("expect `mushaf` not to be `Err`");
 
         // Add some assertions to actually test something
         assert!(mushaf.max_page > 0);

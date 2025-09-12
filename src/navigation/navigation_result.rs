@@ -26,7 +26,7 @@ pub struct NavigationResult {
 }
 
 impl NavigationResult {
-    /// Create a new NavigationResult with all possible parameters
+    /// Create a new `NavigationResult` with all possible parameters
     ///
     /// # Arguments
     /// * `verse` - Reference to the verse reached through navigation
@@ -36,18 +36,19 @@ impl NavigationResult {
     /// * `distance_moved` - The actual distance moved during navigation in lines
     ///
     /// # Returns
-    /// A new NavigationResult instance with all specified information
+    /// A new `NavigationResult` instance with all specified information
+    #[must_use]
     pub fn new(
         verse: Verse,
         overflow: Option<OverflowResult>,
         end_of_page: Option<LastVerseResult>,
         end_of_sura: Option<LastVerseResult>,
         distance_moved: f32
-    ) -> NavigationResult {
+    ) -> Self {
         let remaining_distance = overflow
             .as_ref()
             .map_or(0.0, |v| v.overflowed_verse.lines - v.overflow_lines);
-        NavigationResult {
+        Self {
             verse,
             remaining_distance: (remaining_distance * 100.0).round() / 100.0,
             overflow,
@@ -57,16 +58,17 @@ impl NavigationResult {
         }
     }
 
-    /// Create a new NavigationResult for a normal navigation with no boundary conditions
+    /// Create a new `NavigationResult` for a normal navigation with no boundary conditions
     ///
     /// # Arguments
     /// * `verse` - Reference to the verse reached through navigation
     /// * `distance_moved` - The actual distance moved during navigation in lines
     ///
     /// # Returns
-    /// A new NavigationResult instance with only the target verse and no boundary information
-    pub fn new_normal(verse: Verse, distance_moved: f32) -> NavigationResult {
-        NavigationResult {
+    /// A new `NavigationResult` instance with only the target verse and no boundary information
+    #[must_use]
+    pub const fn new_normal(verse: Verse, distance_moved: f32) -> Self {
+        Self {
             verse,
             overflow: None,
             end_of_page: None,
@@ -76,7 +78,7 @@ impl NavigationResult {
         }
     }
 
-    /// Create a new NavigationResult for a navigation that includes overflow
+    /// Create a new `NavigationResult` for a navigation that includes overflow
     ///
     /// # Arguments
     /// * `verse` - Reference to the verse reached through navigation
@@ -84,14 +86,11 @@ impl NavigationResult {
     /// * `distance_moved` - The actual distance moved during navigation in lines
     ///
     /// # Returns
-    /// A new NavigationResult instance with the target verse and overflow information
-    pub fn new_overflowed(
-        verse: Verse,
-        overflow: OverflowResult,
-        distance_moved: f32
-    ) -> NavigationResult {
+    /// A new `NavigationResult` instance with the target verse and overflow information
+    #[must_use]
+    pub fn new_overflowed(verse: Verse, overflow: OverflowResult, distance_moved: f32) -> Self {
         let remaining_distance = overflow.overflowed_verse.lines - overflow.overflow_lines;
-        NavigationResult {
+        Self {
             verse,
             remaining_distance: (remaining_distance * 100.0).round() / 100.0,
             overflow: Some(overflow),
@@ -105,7 +104,8 @@ impl NavigationResult {
     ///
     /// # Returns
     /// `true` if the navigation hit the last verse of page, sura, or had an overflow
-    pub fn has_boundaries(&self) -> bool {
+    #[must_use]
+    pub const fn has_boundaries(&self) -> bool {
         self.overflow.is_some() || self.end_of_page.is_some() || self.end_of_sura.is_some()
     }
 
@@ -113,7 +113,8 @@ impl NavigationResult {
     ///
     /// # Returns
     /// `true` if the navigation exceeded available boundaries
-    pub fn has_overflow(&self) -> bool {
+    #[must_use]
+    pub const fn has_overflow(&self) -> bool {
         self.overflow.is_some()
     }
 
@@ -121,14 +122,15 @@ impl NavigationResult {
     ///
     /// # Returns
     /// The number of overflow lines, or 0.0 if no overflow occurred
-    pub fn overflow_lines(&self) -> f32 {
+    #[must_use]
+    pub const fn overflow_lines(&self) -> f32 {
         match &self.overflow {
             Some(overflow) => overflow.overflow_lines,
             None => 0.0,
         }
     }
 
-    /// Create a new NavigationResult that reached the last verse of a page
+    /// Create a new `NavigationResult` that reached the last verse of a page
     ///
     /// # Arguments
     /// * `verse` - Reference to the verse reached through navigation
@@ -136,13 +138,14 @@ impl NavigationResult {
     /// * `distance_moved` - The actual distance moved during navigation in lines
     ///
     /// # Returns
-    /// A new NavigationResult instance with the target verse and last-of-page information
-    pub fn new_page_boundary(
+    /// A new `NavigationResult` instance with the target verse and last-of-page information
+    #[must_use]
+    pub const fn new_page_boundary(
         verse: Verse,
         last_of_page: LastVerseResult,
         distance_moved: f32
-    ) -> NavigationResult {
-        NavigationResult {
+    ) -> Self {
+        Self {
             verse,
             overflow: None,
             end_of_page: Some(last_of_page),
@@ -152,7 +155,7 @@ impl NavigationResult {
         }
     }
 
-    /// Create a new NavigationResult that reached the last verse of a sura
+    /// Create a new `NavigationResult` that reached the last verse of a sura
     ///
     /// # Arguments
     /// * `verse` - Reference to the verse reached through navigation
@@ -160,13 +163,14 @@ impl NavigationResult {
     /// * `distance_moved` - The actual distance moved during navigation in lines
     ///
     /// # Returns
-    /// A new NavigationResult instance with the target verse and last-of-sura information
-    pub fn new_sura_boundary(
+    /// A new `NavigationResult` instance with the target verse and last-of-sura information
+    #[must_use]
+    pub const fn new_sura_boundary(
         verse: Verse,
         last_of_sura: LastVerseResult,
         distance_moved: f32
-    ) -> NavigationResult {
-        NavigationResult {
+    ) -> Self {
+        Self {
             verse,
             overflow: None,
             end_of_page: None,

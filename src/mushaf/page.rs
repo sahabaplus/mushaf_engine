@@ -26,8 +26,9 @@ impl Page {
     ///
     /// # Returns
     /// A new Page instance
-    pub fn new(number: u16, verses: Rc<[Verse]>) -> Page {
-        Page {
+    #[must_use]
+    pub const fn new(number: u16, verses: Rc<[Verse]>) -> Self {
+        Self {
             number,
             verses,
         }
@@ -37,7 +38,8 @@ impl Page {
     ///
     /// # Returns
     /// The page number (1-indexed)
-    pub fn number(&self) -> u16 {
+    #[must_use]
+    pub const fn number(&self) -> u16 {
         self.number
     }
 
@@ -45,6 +47,8 @@ impl Page {
     ///
     /// # Returns
     /// A slice containing all verses on this page
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn verses(&self) -> &[Verse] {
         &self.verses
     }

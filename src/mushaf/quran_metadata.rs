@@ -1,3 +1,4 @@
+use crate::navigation::LookupError;
 use super::Mushaf;
 
 /// Information about a Sura in the Quran
@@ -21,12 +22,16 @@ pub struct SuraInfo {
 #[derive(Debug, Clone)]
 pub struct QuranMetadata {
     /// Array of Sura information indexed by Sura number (0-indexed for internal storage)
-    /// Access using get_sura_info() method to convert 1-based sura numbers
+    /// Access using `get_sura_info()` method to convert 1-based sura numbers
     suras: Vec<SuraInfo>,
 }
 
 impl QuranMetadata {
-    /// Create a new QuranMetadata from the Mushaf
+    /// Create a new `QuranMetadata` from the Mushaf
+    ///
+    /// # Panics
+    /// * `expect` if the sura number cannot be converted to a `u8`
+    #[must_use]
     pub fn from_mushaf(mushaf: &Mushaf) -> Self {
         // Create a Vec with capacity for exactly 114 suras (0-indexed internally)
         let mut suras = Vec::with_capacity(114);
@@ -65,7 +70,9 @@ impl QuranMetadata {
             let total_lines_with_header = sura_lines[sura_num] + header_lines;
 
             suras.push(SuraInfo {
-                number: sura_num as u8,
+                number: u8
+                    ::try_from(sura_num)
+                    .expect("expect `sura_num` to be less than `u8::MAX`"),
                 total_verses: sura_verse_count[sura_num],
                 lines: sura_lines[sura_num],
                 lines_with_header: total_lines_with_header,
@@ -79,16 +86,30 @@ impl QuranMetadata {
 
     /// Convert 1-based sura number to 0-based index for internal storage
     #[inline]
-    fn sura_to_index(sura_number: u8) -> Option<usize> {
-        if sura_number == 0 || sura_number > 114 { None } else { Some((sura_number - 1) as usize) }
+    const fn sura_to_index(sura_number: u8) -> Option<usize> {
+        if Self::is_valid_sura(sura_number) { Some((sura_number - 1) as usize) } else { None }
+    }
+
+    const fn is_valid_sura(sura_number: u8) -> bool {
+        sura_number >= 1 && sura_number <= 114
     }
 
     /// Get information about a specific Sura (using 1-based sura number)
-    pub fn get_sura_info(&self, sura_number: u8) -> Option<&SuraInfo> {
-        Self::sura_to_index(sura_number).map(|idx| &self.suras[idx])
+    ///
+    /// # Errors
+    /// * `LookupError::InvalidSura` if the sura number is invalid
+    /// * `LookupError::SuraNotFound` if the sura number is not found
+    pub fn get_sura_info(&self, sura_number: u8) -> Result<&SuraInfo, LookupError> {
+        if !Self::is_valid_sura(sura_number) {
+            return Err(LookupError::InvalidSura(sura_number));
+        }
+        Self::sura_to_index(sura_number)
+            .map(|idx| &self.suras[idx])
+            .ok_or(LookupError::SuraNotFound(sura_number))
     }
 
     /// Find which Sura contains a particular page
+    #[must_use]
     pub fn find_sura_by_page(&self, page_number: u16) -> Option<Vec<u8>> {
         let vec: Vec<u8> = self.suras
             .iter()
@@ -104,18 +125,33 @@ impl QuranMetadata {
     }
 
     /// Get total number of lines for a range of Suras
-    pub fn get_lines_range(&self, start_sura: u8, end_sura: u8) -> f32 {
-        let start = start_sura.max(1);
-        let end = end_sura.min(114);
+    ///
+    /// # Errors
+    /// * `LookupError::InvalidSura` if the sura number is invalid
+    /// * `LookupError::SuraNotFound` if the sura number is not found
+    ///
+    /// # Panics
+    /// * `expect` if `get_sura_info` fails
+    pub fn get_lines_range(&self, start_sura: u8, end_sura: u8) -> Result<f32, LookupError> {
+        if !Self::is_valid_sura(start_sura) {
+            return Err(LookupError::InvalidSura(start_sura));
+        }
+        if !Self::is_valid_sura(end_sura) {
+            return Err(LookupError::InvalidSura(end_sura));
+        }
 
-        (start..=end)
-            .filter_map(|sura_num| self.get_sura_info(sura_num))
+        let sum = (start_sura..=end_sura)
+            .map(|sura_num|
+                self.get_sura_info(sura_num).expect("expect `get_sura_info` to succeed")
+            )
             .map(|info| info.lines_with_header)
-            .sum()
+            .sum();
+        Ok(sum)
     }
 
     /// Get the number of Suras in the Quran
     #[inline]
+    #[must_use]
     pub fn total_suras(&self) -> usize {
         self.suras.len()
     }
@@ -130,14 +166,26 @@ impl QuranMetadata {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{ king_fahad_mushaf::KingFahadMushaf, mushaf::QuranMetadata };
+    use crate::{ king_fahad_mushaf::{ JsonVerse, KingFahadMushaf }, mushaf::QuranMetadata };
 
     fn setup_metadata() -> QuranMetadata {
         let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         data_path.push("data");
         data_path.push("king_fahad_mushaf.json");
 
-        let mushaf = KingFahadMushaf::from_file(data_path.to_str().unwrap());
+        let mushaf = {
+            let path = data_path.to_str().expect("expect `data_path` to be a valid string");
+            // Load from provided JSON path
+            let file_content = std::fs
+                ::read_to_string(path)
+                .expect("Failed to read mushaf data file");
+
+            let pages: Vec<Vec<JsonVerse>> = serde_json
+                ::from_str(&file_content)
+                .expect("Failed to parse mushaf JSON data");
+
+            KingFahadMushaf::create_mushaf_from_pages(pages)
+        };
         QuranMetadata::from_mushaf(&mushaf)
     }
 
@@ -149,19 +197,19 @@ mod tests {
         assert_eq!(metadata.total_suras(), 114);
 
         // Test Al-Fatiha info
-        let fatiha = metadata.get_sura_info(1).unwrap();
+        let fatiha = metadata.get_sura_info(1).expect("expect `fatiha` not to be Err");
         assert_eq!(fatiha.number, 1);
         assert_eq!(fatiha.total_verses, 7); // Al-Fatiha has 7 verses
         assert!(fatiha.lines_with_header > fatiha.lines); // Should include header
 
         // Test At-Tawbah (no bismillah)
-        let tawbah = metadata.get_sura_info(9).unwrap();
+        let tawbah = metadata.get_sura_info(9).expect("expect `tawbah` not to be Err");
         assert_eq!(tawbah.number, 9);
-        assert_eq!(tawbah.lines_with_header, tawbah.lines + 1.0); // Only 1 line for header
+        assert!((tawbah.lines_with_header - (tawbah.lines + 1.0)).abs() < f32::EPSILON); // Only 1 line for header
 
         // Test invalid sura numbers
-        assert!(metadata.get_sura_info(0).is_none());
-        assert!(metadata.get_sura_info(115).is_none());
+        assert!(metadata.get_sura_info(0).is_err());
+        assert!(metadata.get_sura_info(115).is_err());
     }
 
     #[test]
@@ -171,13 +219,15 @@ mod tests {
         // First page should contain Al-Fatiha
         let suras_on_page1 = metadata.find_sura_by_page(1);
         assert!(suras_on_page1.is_some());
-        let suras_on_page1 = suras_on_page1.unwrap();
+        let suras_on_page1 = suras_on_page1.expect("expect `suras_on_page1` not to be None");
         assert!(suras_on_page1.contains(&1));
 
         // Test a page that contains multiple suras
         // This is just an example - adjust with actual data
-        let page_with_suras = metadata.find_sura_by_page(600).unwrap();
-        println!("Suras on page 600: {:?}", page_with_suras);
+        let page_with_suras = metadata
+            .find_sura_by_page(600)
+            .expect("expect `page_with_suras` not to be None");
+        println!("Suras on page 600: {page_with_suras:?}");
         assert!(!page_with_suras.is_empty());
     }
 
@@ -186,12 +236,13 @@ mod tests {
         let metadata = setup_metadata();
 
         // Test line counting for a range of suras
-        let lines_1_to_3 = metadata.get_lines_range(1, 3);
+        let lines_1_to_3 = metadata
+            .get_lines_range(1, 3)
+            .expect("expect `lines_1_to_3` not to be Err");
         assert!(lines_1_to_3 > 0.0, "Lines for suras 1-3 should be positive");
 
-        // Test with invalid range (should handle gracefully)
-        let lines_invalid = metadata.get_lines_range(0, 115);
-        assert_eq!(lines_invalid, metadata.get_lines_range(1, 114)); // Should clamp to valid range
+        // Test with invalid range
+        assert!(metadata.get_lines_range(0, 115).is_err());
     }
 
     #[test]
@@ -200,12 +251,12 @@ mod tests {
 
         let suras = metadata.find_sura_by_page(106);
         assert!(suras.is_some());
-        let suras = suras.unwrap();
+        let suras = suras.expect("expect `suras` not to be None");
         assert!(suras.iter().eq([4, 5].iter()));
 
         let suras = metadata.find_sura_by_page(604);
         assert!(suras.is_some());
-        let suras = suras.unwrap();
+        let suras = suras.expect("expect `suras` not to be None");
         assert!(suras.iter().eq([112, 113, 114].iter()));
 
         let suras = metadata.find_sura_by_page(605);

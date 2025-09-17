@@ -1,6 +1,6 @@
 use std::{ error::Error, fmt::Display };
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum NavigationError {
     UnknownError,
     InvalidSura,
@@ -43,6 +43,7 @@ pub enum LookupError {
     SuraNotFound(u8),
     InvalidVerse(u16),
     VerseNotFound(u16),
+    OutOfBounds,
 }
 
 impl Display for LookupError {
@@ -52,6 +53,7 @@ impl Display for LookupError {
             Self::SuraNotFound(i) => write!(f, "SuraNotFound {i}"),
             Self::InvalidVerse(i) => write!(f, "InvalidVerse {i}"),
             Self::VerseNotFound(i) => write!(f, "VerseNotFound {i}"),
+            Self::OutOfBounds => write!(f, "OutOfBounds"),
         }
     }
 }

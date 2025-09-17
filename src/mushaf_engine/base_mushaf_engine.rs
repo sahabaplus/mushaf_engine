@@ -28,27 +28,11 @@ impl BaseMushafEngine {
         self.quran_metadata.get_sura_info(sura_number)
     }
 
-    fn is_wrong_direction(
-        start: impl Into<VersePosition>,
-        end: impl Into<VersePosition>,
-        direction: Direction
-    ) -> bool {
-        let (start, end) = (start.into(), end.into());
-        let internal_wrong_direction = start.sura() == end.sura() && start.verse() > end.verse();
-        let external_wrong_direction = match direction {
-            Direction::Downwards => start.sura() > end.sura(),
-            Direction::Upwards => start.sura() < end.sura(),
-        };
-
-        internal_wrong_direction || external_wrong_direction
-    }
-
     fn prefer_last_of_sura(
         &self,
         last_of_sura: Option<LastVerseResult>,
         current_verse: &Verse,
-        direction: Direction,
-        settings: NavigationSettings
+        direction: Direction
     ) -> LastVerseResult {
         if let Some(last_result) = &last_of_sura {
             if current_verse.sura == last_result.last_verse.sura {
@@ -65,7 +49,7 @@ impl BaseMushafEngine {
 
         let lines_distance =
             self
-                .calculate_lines(*current_verse, *last_verse, direction, settings)
+                .calculate_lines(*current_verse, *last_verse, direction, Default::default())
                 .expect("Lines calculation should succeed") - current_verse.lines;
 
         if let Some(existing_last) = last_of_sura {
@@ -81,8 +65,7 @@ impl BaseMushafEngine {
         &self,
         last_of_page: Option<LastVerseResult>,
         current_verse: &Verse,
-        direction: Direction,
-        settings: NavigationSettings
+        direction: Direction
     ) -> Option<LastVerseResult> {
         if let Some(existing_last) = &last_of_page {
             if *current_verse == existing_last.last_verse {
@@ -93,12 +76,12 @@ impl BaseMushafEngine {
         let (_, page, _idx) = self.navigator.find_verse(*current_verse).ok()?;
         let new_last_of_page = self.mushaf.get_page(page)?.verses().last()?;
 
-        if Self::is_wrong_direction(*current_verse, *new_last_of_page, direction) {
+        if VersesNavigator::is_wrong_direction(*current_verse, *new_last_of_page, direction) {
             return last_of_page;
         }
 
         let lines_distance = self
-            .calculate_lines(*current_verse, *new_last_of_page, direction, settings)
+            .calculate_lines(*current_verse, *new_last_of_page, direction, Default::default())
             .ok()?;
 
         if let Some(existing_last) = last_of_page {
@@ -147,7 +130,7 @@ impl IMushafEngine for BaseMushafEngine {
         let mut remaining_lines = lines;
 
         let mut navigator = self.create_navigator(settings, direction);
-        navigator.reset_position(*verse);
+        navigator.reset_position(*verse).map_err(|_| NavigationError::OutOfBounds)?;
 
         let mut overflow: Option<OverflowResult> = None;
         let mut previous_verse = *navigator.current_verse();
@@ -157,6 +140,10 @@ impl IMushafEngine for BaseMushafEngine {
 
         loop {
             let current_verse = navigator.current_verse();
+            // We looped twice and stuck at the same verse
+            if previous_verse == *current_verse && (lines - remaining_lines).abs() > f32::EPSILON {
+                break;
+            }
             let current_sura_info = self.quran_metadata
                 .get_sura_info(current_verse.sura)
                 .expect("Current verse sura should exist");
@@ -186,18 +173,8 @@ impl IMushafEngine for BaseMushafEngine {
             }
         }
 
-        let last_of_sura = self.prefer_last_of_sura(
-            last_of_sura,
-            &previous_verse,
-            direction,
-            settings
-        );
-        let last_of_page = self.prefer_last_of_page(
-            last_of_page,
-            &previous_verse,
-            direction,
-            settings
-        );
+        let last_of_sura = self.prefer_last_of_sura(last_of_sura, &previous_verse, direction);
+        let last_of_page = self.prefer_last_of_page(last_of_page, &previous_verse, direction);
 
         Ok(
             NavigationResult::new(
@@ -222,7 +199,7 @@ impl IMushafEngine for BaseMushafEngine {
         settings: NavigationSettings
     ) -> Result<f32, CalculatingLinesError> {
         let (start, end) = (start.into(), end.into());
-        let is_wrong_direction = Self::is_wrong_direction(start, end, direction);
+        let is_wrong_direction = VersesNavigator::is_wrong_direction(start, end, direction);
         if is_wrong_direction {
             return Err(CalculatingLinesError::WrongBoundary);
         }
@@ -268,7 +245,15 @@ mod tests {
     use crate::{
         king_fahad_mushaf::{ JsonVerse, KingFahadMushaf },
         mushaf_engine::{ base_mushaf_engine::BaseMushafEngine, IMushafEngine },
-        navigation::{ Direction, NavigationResult, VersePosition, VersesNavigator },
+        navigation::{
+            Direction,
+            LookupError,
+            NavigationError,
+            NavigationResult,
+            NavigationSettings,
+            VersePosition,
+            VersesNavigator,
+        },
     };
 
     fn setup_engine() -> BaseMushafEngine {
@@ -365,5 +350,112 @@ mod tests {
             Default::default()
         );
         assert!(lines.is_ok());
+    }
+
+    #[test]
+    fn multiple_iterations() {
+        let engine = setup_engine();
+        let settings = NavigationSettings::builder().ignore_sura_header(true);
+        let lines = engine.calculate_lines(
+            VersePosition::start(),
+            VersePosition::end(),
+            Direction::Downwards,
+            settings
+        );
+        assert!(lines.is_ok());
+        println!("{lines:?}");
+        let whole_mushaf_lines = lines.expect("expect `lines` not to be None");
+
+        let navigate_by_whole_mushaf_ratio = |ratio: f32, additional_lines: f32| {
+            engine
+                .navigate(
+                    whole_mushaf_lines * ratio + additional_lines,
+                    VersePosition::start(),
+                    Direction::Downwards,
+                    settings.iteration_limit(1)
+                )
+                .expect("expect `navigate` to succeed")
+        };
+
+        // One full cycle
+        let result = navigate_by_whole_mushaf_ratio(1.0, 0.0);
+        assert_eq!(VersePosition::end(), result.verse);
+
+        // One full cycle plus small overflow
+        let result = navigate_by_whole_mushaf_ratio(1.0, 0.1);
+        assert_eq!(VersePosition::end(), result.verse);
+        assert!(result.overflow.is_some());
+        let overflow = result.overflow.expect("expect `overflow` not to be None");
+        // Should round back to start
+        assert_eq!(VersePosition::start(), overflow.overflowed_verse);
+
+        // One and a half cycle
+        let result = navigate_by_whole_mushaf_ratio(1.5, 0.0);
+        assert_eq!(result.verse.sura, 18); // Surat Al-Kahf
+        assert!((30..=39).contains(&result.verse.number));
+
+        // Two full cycles
+        let result = navigate_by_whole_mushaf_ratio(2.0, 0.0);
+        assert_eq!(VersePosition::end(), result.verse);
+
+        // Two full cycles plus small overflow
+        let result = navigate_by_whole_mushaf_ratio(2.0, 0.1);
+        assert_eq!(VersePosition::end(), result.verse);
+        assert!(result.overflow.is_some());
+        assert!(result.end_of_page.is_some());
+        assert!(result.end_of_sura.is_some());
+        let overflow = result.overflow.expect("expect `overflow` not to be None");
+        let end_of_page = result.end_of_page.expect("expect `end_of_page` not to be None");
+        let end_of_sura = result.end_of_sura.expect("expect `end_of_sura` not to be None");
+        // Stick at the end
+        assert_eq!(VersePosition::end(), overflow.overflowed_verse);
+        assert_eq!(VersePosition::end(), end_of_page.last_verse);
+        assert_eq!(VersePosition::end(), end_of_sura.last_verse);
+    }
+
+    #[test]
+    #[ignore]
+    fn bounded_navigation() {
+        let engine = setup_engine();
+        let start_bound = VersePosition::new(2, 1);
+        let end_bound = VersePosition::new(2, 50);
+        let settings = NavigationSettings::builder()
+            .start_position(start_bound)
+            .end_position(end_bound);
+        let result = engine.navigate(10.0, VersePosition::start(), Default::default(), settings);
+        assert!(result.is_err());
+        let err = result.expect_err("expect `err` not to be None");
+        assert!(err == NavigationError::OutOfBounds);
+
+        let result = engine.navigate(0.0, start_bound, Default::default(), settings);
+        assert!(result.is_ok());
+        let verse = result.expect("expect `result` not to be None").verse;
+        assert_eq!(start_bound, verse);
+
+        // Massive overflow
+        let result = engine.navigate(1000.0, start_bound, Default::default(), settings);
+        assert!(result.is_ok());
+        let verse = result.expect("expect `result` not to be None").verse;
+        assert_eq!(end_bound, verse);
+
+        // Multiple iterations
+        let bounds_lines = engine.calculate_lines(
+            start_bound,
+            end_bound,
+            Default::default(),
+            settings
+        );
+        assert!(bounds_lines.is_ok());
+        let bounds_lines = bounds_lines.expect("expect `bounds_lines` not to be None");
+        let result = engine.navigate(
+            bounds_lines * 2.0 + 15.0,
+            start_bound,
+            Default::default(),
+            settings.iteration_limit(2)
+        );
+        assert!(result.is_ok());
+        let verse = result.expect("expect `result` not to be None").verse;
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 10);
     }
 }

@@ -134,10 +134,16 @@ impl VersesNavigator {
         settings: NavigationSettings,
         direction: Direction
     ) -> Self {
-        let settings = if direction == Direction::Downwards {
-            settings
-        } else {
+        let settings = if
+            Self::is_wrong_direction(
+                settings.bounds.start_position,
+                settings.bounds.end_position,
+                direction
+            )
+        {
             settings.reverse_bounds()
+        } else {
+            settings
         };
 
         let mut s = Self {
@@ -150,7 +156,9 @@ impl VersesNavigator {
             iteration_count: 0,
         };
 
-        s.reset_position(settings.bounds.start_position);
+        s.reset_position(settings.bounds.start_position).expect(
+            "expect `reset_position` to succeed"
+        );
         s
     }
 
@@ -175,6 +183,21 @@ impl VersesNavigator {
     #[must_use]
     pub fn builder(mushaf: Rc<Mushaf>, metadata: Rc<QuranMetadata>) -> Self {
         Self::new(mushaf, metadata, Default::default(), Default::default())
+    }
+
+    pub fn is_wrong_direction(
+        start: impl Into<VersePosition>,
+        end: impl Into<VersePosition>,
+        direction: Direction
+    ) -> bool {
+        let (start, end) = (start.into(), end.into());
+        let internal_wrong_direction = start.sura() == end.sura() && start.verse() > end.verse();
+        let external_wrong_direction = match direction {
+            Direction::Downwards => start.sura() > end.sura(),
+            Direction::Upwards => start.sura() < end.sura(),
+        };
+
+        internal_wrong_direction || external_wrong_direction
     }
 
     /// Sets the navigation direction and automatically adjusts bounds.
@@ -264,10 +287,45 @@ impl VersesNavigator {
         &mut self,
         verse: impl Into<VersePosition>
     ) -> Result<&Verse, LookupError> {
+        let verse = verse.into();
+        if self.is_out_of_bounds(verse) {
+            return Err(LookupError::OutOfBounds);
+        }
+
         let (.., page, idx) = self.find_verse(verse)?;
         self.current_page_idx = (page as usize) - 1;
         self.current_verse_idx = idx as usize;
         Ok(self.current_verse())
+    }
+
+    pub fn is_out_of_bounds(&self, verse: VersePosition) -> bool {
+        let verse = self.find_verse(verse);
+        if verse.is_err() {
+            return true;
+        }
+        let (verse, ..) = verse.expect("expect `verse` not to be None");
+        let verse_sura = verse.sura;
+        let verse_number = verse.number;
+        let start_position = self.settings.bounds.start_position;
+        let end_position = self.settings.bounds.end_position;
+
+        let lower_bound_sura = ::std::cmp::min(start_position.sura(), end_position.sura());
+        let upper_bound_sura = ::std::cmp::max(start_position.sura(), end_position.sura());
+        let is_out_of_bounds_sura: bool =
+            verse_sura < lower_bound_sura || verse_sura > upper_bound_sura;
+        if is_out_of_bounds_sura {
+            return true;
+        }
+
+        // Verse sura in the bounds
+
+        if verse_sura == start_position.sura() {
+            return verse_number < start_position.verse();
+        }
+        if verse_sura == end_position.sura() {
+            return verse_number > end_position.verse();
+        }
+        false
     }
 
     /// Resets the iteration counter to a specific value.

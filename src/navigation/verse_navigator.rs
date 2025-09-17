@@ -304,22 +304,6 @@ impl VersesNavigator {
         &self.settings
     }
 
-    pub fn forward_step(&mut self) -> Option<&Verse> {
-        self.next_verse()
-    }
-
-    pub fn backward_step(&mut self) -> Option<&Verse> {
-        // Get verse page
-        let current_page_verses = self.mushaf.pages[self.current_page_idx].verses();
-        if self.current_verse_idx == 0 {
-            self.current_page_idx -= 1;
-            self.current_verse_idx = current_page_verses.len() - 1;
-        } else {
-            self.current_verse_idx -= 1;
-        }
-        Some(&current_page_verses[self.current_verse_idx])
-    }
-
     /// Moves to the next verse based on direction and iteration bounds.
     ///
     /// This is the core navigation method that handles iteration limits and bounded navigation.
@@ -387,6 +371,7 @@ impl VersesNavigator {
     /// Each time the navigator reaches the end position and resets to start position,
     /// the iteration count is incremented.
     pub fn next_verse(&mut self) -> Option<&Verse> {
+        let pre_current_verse = *self.current_verse();
         let start_position = self.settings.bounds.start_position;
         let end_position = self.settings.bounds.end_position;
         let remaining_iterations = self.settings.bounds.iteration_limit.saturating_sub(
@@ -553,8 +538,7 @@ impl VersesNavigator {
             return None;
         }
 
-        let mut page_idx = self.current_page_idx;
-        let mut page_verses = self.mushaf.pages[page_idx].verses();
+        let mut page_verses = self.mushaf.pages[self.current_page_idx].verses();
         let mut remaining =
             index +
             (if backward {
@@ -578,8 +562,8 @@ impl VersesNavigator {
 
             remaining -= page_verses.len();
             // Move to next page
-            page_idx = {
-                match (page_idx, backward) {
+            self.current_page_idx = {
+                match (self.current_page_idx, backward) {
                     (0, true) => {
                         return None;
                     }
@@ -590,11 +574,11 @@ impl VersesNavigator {
                 }
 
                 match backward {
-                    true => { page_idx - 1 }
-                    false => { page_idx + 1 }
+                    true => { self.current_page_idx - 1 }
+                    false => { self.current_page_idx + 1 }
                 }
             };
-            page_verses = self.mushaf.pages[page_idx].verses();
+            page_verses = self.mushaf.pages[self.current_page_idx].verses();
         }
 
         None
@@ -684,7 +668,7 @@ mod test {
             Default::default(),
             Default::default()
         );
-        navigator.reset_position(VersePosition::new(5, 119));
+        assert!(navigator.reset_position(VersePosition::new(5, 119)).is_ok());
 
         let verse = navigator.next_verse();
         let verse = verse.expect("expect `verse` not to be None");

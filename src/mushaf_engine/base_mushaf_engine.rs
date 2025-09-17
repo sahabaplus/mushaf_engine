@@ -1,17 +1,4 @@
-use crate::{
-    mushaf::{ Mushaf, QuranMetadata, SuraInfo, Verse },
-    navigation::{
-        CalculatingLinesError,
-        Direction,
-        LastVerseResult,
-        LookupError,
-        NavigationError,
-        NavigationResult,
-        NavigationSettings,
-        OverflowResult,
-        VersesNavigator,
-    },
-};
+use crate::{ mushaf::{ Mushaf, QuranMetadata, SuraInfo, Verse }, navigation::* };
 use std::rc::Rc;
 
 use super::{ IMushafEngine };
@@ -28,10 +15,7 @@ impl BaseMushafEngine {
     #[must_use]
     pub fn new(mushaf: Rc<Mushaf>) -> Self {
         let quran_metadata = Rc::new(QuranMetadata::from_mushaf(&mushaf));
-        let navigator = VersesNavigator::builder(
-            mushaf.clone(),
-            quran_metadata.clone()
-        );
+        let navigator = VersesNavigator::builder(mushaf.clone(), quran_metadata.clone());
         Self { mushaf, quran_metadata, navigator }
     }
 
@@ -44,11 +28,19 @@ impl BaseMushafEngine {
         self.quran_metadata.get_sura_info(sura_number)
     }
 
-    const fn is_wrong_direction(start_sura: u8, end_sura: u8, direction: Direction) -> bool {
-        match direction {
-            Direction::Downwards => start_sura > end_sura,
-            Direction::Upwards => start_sura < end_sura,
-        }
+    fn is_wrong_direction(
+        start: impl Into<VersePosition>,
+        end: impl Into<VersePosition>,
+        direction: Direction
+    ) -> bool {
+        let (start, end) = (start.into(), end.into());
+        let internal_wrong_direction = start.sura() == end.sura() && start.verse() > end.verse();
+        let external_wrong_direction = match direction {
+            Direction::Downwards => start.sura() > end.sura(),
+            Direction::Upwards => start.sura() < end.sura(),
+        };
+
+        internal_wrong_direction || external_wrong_direction
     }
 
     fn prefer_last_of_sura(
@@ -68,19 +60,12 @@ impl BaseMushafEngine {
             .get_sura_info(current_verse.sura)
             .expect("Sura should exist for current verse");
         let last_verse = self.navigator
-            .find_verse(sura.number, sura.total_verses)
+            .find_verse(VersePosition::new(sura.number, sura.total_verses))
             .expect("Last verse of sura should exist").0;
 
         let lines_distance =
             self
-                .calculate_lines(
-                    current_verse.sura,
-                    current_verse.number,
-                    last_verse.sura,
-                    last_verse.number,
-                    direction,
-                    settings
-                )
+                .calculate_lines(*current_verse, *last_verse, direction, settings)
                 .expect("Lines calculation should succeed") - current_verse.lines;
 
         if let Some(existing_last) = last_of_sura {
@@ -105,24 +90,15 @@ impl BaseMushafEngine {
             }
         }
 
-        let (_, page, _idx) = self.navigator
-            .find_verse(current_verse.sura, current_verse.number)
-            .ok()?;
+        let (_, page, _idx) = self.navigator.find_verse(*current_verse).ok()?;
         let new_last_of_page = self.mushaf.get_page(page)?.verses().last()?;
 
-        if Self::is_wrong_direction(current_verse.sura, new_last_of_page.sura, direction) {
+        if Self::is_wrong_direction(*current_verse, *new_last_of_page, direction) {
             return last_of_page;
         }
 
         let lines_distance = self
-            .calculate_lines(
-                current_verse.sura,
-                current_verse.number,
-                new_last_of_page.sura,
-                new_last_of_page.number,
-                direction,
-                settings
-            )
+            .calculate_lines(*current_verse, *new_last_of_page, direction, settings)
             .ok()?;
 
         if let Some(existing_last) = last_of_page {
@@ -147,8 +123,7 @@ impl IMushafEngine for BaseMushafEngine {
     fn navigate(
         &self,
         lines: f32,
-        from_sura: u8,
-        from_verse: u16,
+        from: impl Into<VersePosition>,
         direction: Direction,
         settings: NavigationSettings
     ) -> Result<NavigationResult, NavigationError> {
@@ -158,21 +133,21 @@ impl IMushafEngine for BaseMushafEngine {
 
         // If no lines to navigate, find and return the current verse
         if lines == 0.0 {
-            if let Ok((verse, _page, _idx)) = self.navigator.find_verse(from_sura, from_verse) {
+            if let Ok((verse, ..)) = self.navigator.find_verse(from) {
                 return Ok(NavigationResult::new_normal(*verse, 0.0));
             }
             return Err(NavigationError::InvalidVerse);
         }
 
         // Find starting position
-        let Ok((verse, _page, _verse_idx)) = self.navigator.find_verse(from_sura, from_verse) else {
+        let Ok((verse, ..)) = self.navigator.find_verse(from) else {
             return Err(NavigationError::InvalidVerse);
         };
 
         let mut remaining_lines = lines;
 
         let mut navigator = self.create_navigator(settings, direction);
-        navigator.reset_position(verse.sura, verse.number);
+        navigator.reset_position(*verse);
 
         let mut overflow: Option<OverflowResult> = None;
         let mut previous_verse = *navigator.current_verse();
@@ -241,27 +216,26 @@ impl IMushafEngine for BaseMushafEngine {
 
     fn calculate_lines(
         &self,
-        start_sura: u8,
-        start_verse: u16,
-        end_sura: u8,
-        end_verse: u16,
+        start: impl Into<VersePosition>,
+        end: impl Into<VersePosition>,
         direction: Direction,
         settings: NavigationSettings
     ) -> Result<f32, CalculatingLinesError> {
-        let is_wrong_direction = Self::is_wrong_direction(start_sura, end_sura, direction);
-        if is_wrong_direction || (start_sura == end_sura && start_verse > end_verse) {
+        let (start, end) = (start.into(), end.into());
+        let is_wrong_direction = Self::is_wrong_direction(start, end, direction);
+        if is_wrong_direction {
             return Err(CalculatingLinesError::WrongBoundary);
         }
 
-        let start_verse_data = self.navigator
-            .find_verse(start_sura, start_verse)
-            .map_err(|_| CalculatingLinesError::WrongBoundary)?.0;
-        let end_verse_data = self.navigator
-            .find_verse(end_sura, end_verse)
-            .map_err(|_| CalculatingLinesError::WrongBoundary)?.0;
+        let (start_verse_data, ..) = self.navigator
+            .find_verse(start)
+            .map_err(|_| CalculatingLinesError::WrongBoundary)?;
+        let (end_verse_data, ..) = self.navigator
+            .find_verse(end)
+            .map_err(|_| CalculatingLinesError::WrongBoundary)?;
 
         let mut navigator = self.create_navigator(settings, direction);
-        navigator.reset_position(start_verse_data.sura, start_verse_data.number);
+        navigator.reset_position(start);
 
         let mut lines = 0.0;
         loop {
@@ -278,13 +252,12 @@ impl IMushafEngine for BaseMushafEngine {
 
     fn next_verse(
         &self,
-        sura_number: u8,
-        verse_number: u16,
+        from: impl Into<VersePosition>,
         direction: Direction,
         settings: NavigationSettings
     ) -> Option<Verse> {
         let mut navigator = self.create_navigator(settings, direction);
-        navigator.reset_position(sura_number, verse_number);
+        navigator.reset_position(from);
         navigator.next_verse().copied()
     }
 }
@@ -295,7 +268,7 @@ mod tests {
     use crate::{
         king_fahad_mushaf::{ JsonVerse, KingFahadMushaf },
         mushaf_engine::{ base_mushaf_engine::BaseMushafEngine, IMushafEngine },
-        navigation::{ Direction, NavigationResult, VersesNavigator },
+        navigation::{ Direction, NavigationResult, VersePosition, VersesNavigator },
     };
 
     fn setup_engine() -> BaseMushafEngine {
@@ -324,7 +297,7 @@ mod tests {
         let engine = setup_engine();
         let lines = 15.1f32;
         let result = engine
-            .navigate(lines, 5, 3, Direction::Upwards, Default::default())
+            .navigate(lines, VersePosition::new(5, 3), Direction::Upwards, Default::default())
             .expect("expect `navigate` to succeed");
         println!("{:16}{}", "Lines: ".bold().cyan(), lines.to_string().yellow().bold());
         println!("{result}");
@@ -356,7 +329,7 @@ mod tests {
         let engine = setup_engine();
 
         let v = engine
-            .navigate(14.7f32, 114, 1, Direction::Upwards, Default::default())
+            .navigate(14.7f32, VersePosition::new(114, 1), Direction::Upwards, Default::default())
             .expect("expect `navigate` to succeed");
 
         println!("{v}");
@@ -376,7 +349,7 @@ mod tests {
 
         // First verse of Al-Fatiha
         let result = engine
-            .navigate(0.0, 1, 1, Direction::Downwards, Default::default())
+            .navigate(0.0, VersePosition::start(), Direction::Downwards, Default::default())
             .expect("expect `navigate` to succeed");
         assert_eq!(result.verse.sura, 1);
         assert_eq!(result.verse.number, 1);
@@ -385,7 +358,12 @@ mod tests {
     #[test]
     fn calculating_lines() {
         let engine = setup_engine();
-        let lines = engine.calculate_lines(1, 1, 114, 6, Direction::Downwards, Default::default());
+        let lines = engine.calculate_lines(
+            VersePosition::start(),
+            VersePosition::end(),
+            Direction::Downwards,
+            Default::default()
+        );
         assert!(lines.is_ok());
     }
 }

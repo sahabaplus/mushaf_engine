@@ -9,6 +9,7 @@ use crate::{
         NavigationError,
         NavigationResult,
         NavigationSettings,
+        VersePosition,
     },
 };
 
@@ -43,8 +44,7 @@ pub trait IMushafEngine {
     fn navigate(
         &self,
         lines: f32,
-        from_sura: u8,
-        from_verse: u16,
+        from: impl Into<VersePosition>,
         direction: Direction,
         settings: NavigationSettings
     ) -> Result<NavigationResult, NavigationError>;
@@ -65,10 +65,8 @@ pub trait IMushafEngine {
     /// Calculate the lines between start and end verses
     ///
     /// # Arguments
-    /// * `start_sura` - Start sura number
-    /// * `start_verse` - Start verse number
-    /// * `end_sura` - End sura number
-    /// * `end_verse` - End verse number
+    /// * `start` - Start verse position `VersePosition`
+    /// * `end` - End verse position `VersePosition`
     /// * `direction` - Direction of navigation
     /// * `settings` - Navigation settings
     ///
@@ -79,10 +77,8 @@ pub trait IMushafEngine {
     /// * `CalculatingLinesError::WrongBoundary` if the start and end verses are not in the same sura
     fn calculate_lines(
         &self,
-        start_sura: u8,
-        start_verse: u16,
-        end_sura: u8,
-        end_verse: u16,
+        start: impl Into<VersePosition>,
+        end: impl Into<VersePosition>,
         direction: Direction,
         settings: NavigationSettings
     ) -> Result<f32, CalculatingLinesError>;
@@ -90,8 +86,7 @@ pub trait IMushafEngine {
     /// Find the next verse from a given verse in the specified direction
     ///
     /// # Arguments
-    /// * `sura_number` - Current sura number
-    /// * `verse_number` - Current verse number
+    /// * `after` - Verse position to start from
     /// * `direction` - Direction to navigate
     /// * `settings` - Navigation settings
     ///
@@ -99,8 +94,7 @@ pub trait IMushafEngine {
     /// The next verse or None if at the end
     fn next_verse(
         &self,
-        sura_number: u8,
-        verse_number: u16,
+        from: impl Into<VersePosition>,
         direction: Direction,
         settings: NavigationSettings
     ) -> Option<Verse>;

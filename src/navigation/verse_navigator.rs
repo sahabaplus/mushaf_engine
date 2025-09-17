@@ -402,27 +402,57 @@ impl VersesNavigator {
 
         None
     }
+
+    /// Attempts to advance to the next verse within the current sura.
+    ///
+    /// This method tries to move forward by one verse while ensuring the navigator
+    /// stays within the same sura. If the forward movement would cross into a
+    /// different sura, the operation is rolled back and returns `false`.
+    ///
+    /// # Behavior
+    /// 1. Captures current verse position
+    /// 2. Attempts to move forward by one verse
+    /// 3. Checks if the new verse is in the same sura
+    /// 4. If different sura: rolls back and returns `false`
+    /// 5. If same sura: keeps the new position and returns `true`
+    ///
+    /// # Returns
+    /// * `true` - Successfully moved to next verse in the same sura
+    /// * `false` - Movement would cross sura boundary, position unchanged
+    ///
+    /// # Use Cases
+    /// This method is useful for navigation algorithms that need to respect
+    /// sura boundaries, such as page layout calculations or verse grouping
+    /// operations where crossing suras is not desired.
+    fn try_advance_within_current_sura(&mut self) -> bool {
+        let pre_current_verse = *self.current_verse();
+        let forward_movement = self.forward_index(1).is_some();
+        if forward_movement {
+            if self.current_verse().sura == pre_current_verse.sura {
+                return true;
+            }
+            // Rollback
+            self.backward_index(1);
+        }
+        false
+    }
     /// Move to the next verse in downward direction
     fn next_verse_downward(&mut self) -> Result<(), ()> {
-        let mushaf = &self.mushaf.pages;
-
-        // Try to move to the next verse on the current page
-        self.current_verse_idx += 1;
-
-        // If we've reached the end of current page, move to next page
-        if self.current_verse_idx >= mushaf[self.current_page_idx].verses().len() {
-            self.current_page_idx += 1;
-            self.current_verse_idx = 0;
-
-            // Check if we've reached the end of the mushaf
-            if self.current_page_idx >= mushaf.len() {
-                self.current_page_idx -= 1; // Back to last page.
-                // We reached the end of the mushaf.
-                return Err(());
-            }
+        if self.forward_index(1).is_some() {
+            return Ok(());
         }
+        Err(())
+    }
 
-        Ok(())
+    /// Move to the next verse in upward direction
+    fn next_verse_upward(&mut self) -> Result<(), ()> {
+        if self.try_advance_within_current_sura() {
+            return Ok(());
+        }
+        match self.move_pre_sura(self.current_verse().sura) {
+            Ok(verse) => Ok(()),
+            Err(e) => Err(()),
+        }
     }
 
     fn move_pre_sura(&mut self, current_sura: u8) -> Result<&Verse, LookupError> {
@@ -439,43 +469,6 @@ impl VersesNavigator {
         }
 
         unreachable!()
-    }
-
-    /// Move to the next verse in upward direction
-    fn next_verse_upward(&mut self) -> Result<(), ()> {
-        let pages = Rc::clone(&self.mushaf.pages);
-        let quran_metadata = Rc::clone(&self.quran_metadata);
-        let current_verse = *self.current_verse(); // copy verse
-
-        let mut current_verse_idx = self.current_verse_idx + 1;
-        let mut current_page_idx = self.current_page_idx;
-
-        // check if the next verse index is valid + in same sura
-        if current_verse_idx >= pages[current_page_idx].verses().len() {
-            // Move to previous sura
-            current_page_idx += 1;
-            current_verse_idx = 0;
-        }
-
-        if
-            current_page_idx >= pages.len() ||
-            pages[current_page_idx].verses()[current_verse_idx].sura != current_verse.sura
-        {
-            match self.move_pre_sura(current_verse.sura) {
-                Ok(verse) => {
-                    return Ok(());
-                }
-                Err(e) => {
-                    return Err(());
-                }
-            }
-        }
-
-        // Move next normally
-        self.current_verse_idx = current_verse_idx;
-        self.current_page_idx = current_page_idx;
-
-        Ok(())
     }
 
     /// Find a verse in the mushaf and return its location (`Verse`, `page`, `index_of_verse`)

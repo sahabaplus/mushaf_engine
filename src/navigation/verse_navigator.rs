@@ -21,8 +21,8 @@ use super::Direction;
 ///
 /// ## Iteration Behavior
 /// The navigator tracks iteration count and manages cycling behavior:
-/// - When reaching `end_position` with remaining iterations: resets to `start_position`
-/// - When reaching `end_position` with no remaining iterations: returns `None`
+/// - When reaching `lower_bound` with remaining iterations: resets to `upper_bound`
+/// - When reaching `lower_bound` with no remaining iterations: returns `None`
 /// - Iteration count is incremented each time a cycle completes
 ///
 /// ## Direction Support
@@ -33,36 +33,39 @@ use super::Direction;
 /// # Iteration Limits and Bounds
 ///
 /// ## How Iteration Works
-/// 1. Navigator starts at `start_position`
-/// 2. Moves through verses until reaching `end_position`
-/// 3. If `remaining_iterations > 0`: increment count and reset to `start_position`
+/// 1. Navigator starts at `upper_bound`
+/// 2. Moves through verses until reaching `lower_bound`
+/// 3. If `remaining_iterations > 0`: increment count and reset to `upper_bound`
 /// 4. If `remaining_iterations = 0`: return `None` (stop navigation)
 ///
 /// ## Practical Examples
 ///
 /// ### Reading Al-Fatiha Three Times
 /// ```ignore
+/// use rust_quran_engine::navigation::{VersesNavigator, VersePosition, Direction};
 /// let navigator = VersesNavigator::builder(mushaf, metadata)
-///     .start_position(VersePosition::new(1, 1))
-///     .end_position(VersePosition::new(1, 7))
+///     .upper_bound(VersePosition::new(1, 1))
+///     .lower_bound(VersePosition::new(1, 7))
 ///     .iteration_limit(3)  // Read Al-Fatiha 3 times
 ///     .direction(Direction::Downwards);
 /// ```
 ///
 /// ### Page Layout Calculation
 /// ```ignore
+/// use rust_quran_engine::navigation::{VersesNavigator, VersePosition};
 /// let navigator = VersesNavigator::builder(mushaf, metadata)
-///     .start_position(VersePosition::new(2, 1))
-///     .end_position(VersePosition::new(2, 50))
+///     .upper_bound(VersePosition::new(2, 1))
+///     .lower_bound(VersePosition::new(2, 50))
 ///     .iteration_limit(0)  // No cycling for layout
 ///     .ignore_sura_header(true);  // Exclude headers for precise calculation
 /// ```
 ///
 /// ### Memorization Practice
 /// ```ignore
+/// use rust_quran_engine::navigation::{VersesNavigator, VersePosition, Direction};
 /// let navigator = VersesNavigator::builder(mushaf, metadata)
-///     .start_position(VersePosition::new(67, 1))
-///     .end_position(VersePosition::new(67, 30))
+///     .upper_bound(VersePosition::new(67, 1))
+///     .lower_bound(VersePosition::new(67, 30))
 ///     .iteration_limit(5)  // Practice 5 times
 ///     .direction(Direction::Upwards);  // Read backwards
 /// ```
@@ -119,12 +122,13 @@ impl VersesNavigator {
     /// use rust_quran_engine::navigation::{NavigationSettings, Direction, VersePosition};
     ///
     /// let settings = NavigationSettings::builder()
-    ///     .start_position(VersePosition::new(1, 1))
-    ///     .end_position(VersePosition::new(1, 7))
+    ///     .upper_bound(VersePosition::new(1, 1))
+    ///     .lower_bound(VersePosition::new(1, 7))
     ///     .iteration_limit(2);
     ///
     /// ```
     /// ```ignore
+    /// use rust_quran_engine::navigation::{VersesNavigator, Direction};
     /// let navigator = VersesNavigator::new(mushaf, metadata, settings, Direction::Downwards);
     /// ```
     #[must_use]
@@ -134,18 +138,6 @@ impl VersesNavigator {
         settings: NavigationSettings,
         direction: Direction
     ) -> Self {
-        let settings = if
-            Self::is_wrong_direction(
-                settings.bounds.start_position,
-                settings.bounds.end_position,
-                direction
-            )
-        {
-            settings.reverse_bounds()
-        } else {
-            settings
-        };
-
         let mut s = Self {
             mushaf,
             quran_metadata: metadata,
@@ -156,9 +148,7 @@ impl VersesNavigator {
             iteration_count: 0,
         };
 
-        s.reset_position(settings.bounds.start_position).expect(
-            "expect `reset_position` to succeed"
-        );
+        s.reset_position(s.get_start_bound()).expect("expect `reset_position` to succeed");
         s
     }
 
@@ -167,18 +157,19 @@ impl VersesNavigator {
     /// Default settings:
     /// - `direction`: `Direction::Downwards`
     /// - `iteration_limit`: 0 (no cycling)
-    /// - `start_position`: (1, 1) - beginning of Al-Fatiha
-    /// - `end_position`: (114, 6) - end of An-Nas
+    /// - `upper_bound`: (1, 1) - beginning of Al-Fatiha
+    /// - `lower_bound`: (114, 6) - end of An-Nas
     /// - `ignore_sura_header`: false (include headers)
     ///
     /// # Examples
     ///
     /// ```ignore
-    /// let navigator = VersesNavigator::builder(mushaf, metadata)
-    ///     .start_position(VersePosition::new(2, 1))
-    ///     .end_position(VersePosition::new(2, 50))
-    ///     .iteration_limit(1)
-    ///     .direction(Direction::Upwards);
+    /// use rust_quran_engine::navigation::{VersesNavigator, VersePosition, Direction};
+    /// // let navigator = VersesNavigator::builder(mushaf, metadata)
+    /// //     .upper_bound(VersePosition::new(2, 1))
+    /// //     .lower_bound(VersePosition::new(2, 50))
+    /// //     .iteration_limit(1)
+    /// //     .direction(Direction::Upwards);
     /// ```
     #[must_use]
     pub fn builder(mushaf: Rc<Mushaf>, metadata: Rc<QuranMetadata>) -> Self {
@@ -211,16 +202,26 @@ impl VersesNavigator {
     /// # Examples
     ///
     /// ```ignore
-    /// let navigator = navigator.direction(Direction::Upwards); // Bounds automatically reversed
+    /// let navigator = navigator.direction(Direction::Upwards); // Bounds remain consistent
     /// ```
     #[must_use]
     pub fn direction(mut self, direction: Direction) -> Self {
-        // If the direction is reversed, reverse the bounds
-        if direction != self.direction {
-            self.settings = self.settings.reverse_bounds();
-        }
         self.direction = direction;
         self
+    }
+
+    pub fn get_start_bound(&self) -> VersePosition {
+        match self.direction {
+            Direction::Downwards => self.settings.bounds.upper_bound,
+            Direction::Upwards => self.settings.bounds.lower_bound,
+        }
+    }
+
+    pub fn get_end_bound(&self) -> VersePosition {
+        match self.direction {
+            Direction::Downwards => self.settings.bounds.lower_bound,
+            Direction::Upwards => self.settings.bounds.upper_bound,
+        }
     }
 
     /// Sets the complete navigation settings.
@@ -243,23 +244,29 @@ impl VersesNavigator {
         self
     }
 
-    /// Sets the start position for navigation bounds.
+    /// Sets the upper bound for navigation bounds.
     ///
     /// # Arguments
-    /// * `start_position` - Starting position for navigation
+    /// * `upper_bound` - Upper bound for navigation (must be less than lower_bound)
+    ///
+    /// # Panics
+    /// Panics if the new upper_bound is not less than the current lower_bound.
     #[must_use]
-    pub fn start_position(mut self, start_position: impl Into<VersePosition>) -> Self {
-        self.settings.bounds.start_position = start_position.into();
+    pub fn upper_bound(mut self, upper_bound: impl Into<VersePosition>) -> Self {
+        self.settings.bounds.upper_bound = upper_bound.into();
         self
     }
 
-    /// Sets the end position for navigation bounds.
+    /// Sets the lower bound for navigation bounds.
     ///
     /// # Arguments
-    /// * `end_position` - Ending position for navigation
+    /// * `lower_bound` - Lower bound for navigation (must be greater than upper_bound)
+    ///
+    /// # Panics
+    /// Panics if the new lower_bound is not greater than the current upper_bound.
     #[must_use]
-    pub fn end_position(mut self, end_position: impl Into<VersePosition>) -> Self {
-        self.settings.bounds.end_position = end_position.into();
+    pub fn lower_bound(mut self, lower_bound: impl Into<VersePosition>) -> Self {
+        self.settings.bounds.lower_bound = lower_bound.into();
         self
     }
 
@@ -306,24 +313,22 @@ impl VersesNavigator {
         let (verse, ..) = verse.expect("expect `verse` not to be None");
         let verse_sura = verse.sura;
         let verse_number = verse.number;
-        let start_position = self.settings.bounds.start_position;
-        let end_position = self.settings.bounds.end_position;
+        let upper_bound = self.settings.bounds.upper_bound;
+        let lower_bound = self.settings.bounds.lower_bound;
 
-        let lower_bound_sura = ::std::cmp::min(start_position.sura(), end_position.sura());
-        let upper_bound_sura = ::std::cmp::max(start_position.sura(), end_position.sura());
         let is_out_of_bounds_sura: bool =
-            verse_sura < lower_bound_sura || verse_sura > upper_bound_sura;
+            verse_sura < upper_bound.sura() || verse_sura > lower_bound.sura();
         if is_out_of_bounds_sura {
             return true;
         }
 
         // Verse sura in the bounds
 
-        if verse_sura == start_position.sura() {
-            return verse_number < start_position.verse();
+        if verse_sura == upper_bound.sura() {
+            return verse_number < upper_bound.verse();
         }
-        if verse_sura == end_position.sura() {
-            return verse_number > end_position.verse();
+        if verse_sura == lower_bound.sura() {
+            return verse_number > lower_bound.verse();
         }
         false
     }
@@ -384,8 +389,8 @@ impl VersesNavigator {
     /// ## Basic Navigation
     /// ```ignore
     /// let mut navigator = VersesNavigator::builder(mushaf, metadata)
-    ///     .start_position(VersePosition::new(1, 1))
-    ///     .end_position(VersePosition::new(1, 7))
+    ///     .upper_bound(VersePosition::new(1, 1))
+    ///     .lower_bound(VersePosition::new(1, 7))
     ///     .iteration_limit(0); // No cycling
     ///
     /// // Navigate through Al-Fatiha once
@@ -397,8 +402,8 @@ impl VersesNavigator {
     /// ## Iteration with Cycling
     /// ```ignore
     /// let mut navigator = VersesNavigator::builder(mushaf, metadata)
-    ///     .start_position(VersePosition::new(1, 1))
-    ///     .end_position(VersePosition::new(1, 7))
+    ///     .upper_bound(VersePosition::new(1, 1))
+    ///     .lower_bound(VersePosition::new(1, 7))
     ///     .iteration_limit(2); // Read Al-Fatiha twice
     ///
     /// // Will cycle through Al-Fatiha twice
@@ -410,11 +415,11 @@ impl VersesNavigator {
     /// ## Direction-Aware Navigation
     /// ```ignore
     /// let mut navigator = VersesNavigator::builder(mushaf, metadata)
-    ///     .start_position(VersePosition::new(2, 1))
-    ///     .end_position(VersePosition::new(2, 5))
+    ///     .upper_bound(VersePosition::new(2, 1))
+    ///     .lower_bound(VersePosition::new(2, 5))
     ///     .direction(Direction::Upwards); // Navigate backwards
     ///
-    /// // Will navigate from (2,5) to (2,1) due to automatic bounds reversal
+    /// // Will navigate from (2,1) to (2,5) with bounds remaining consistent
     /// while let Some(verse) = navigator.next_verse() {
     ///     println!("{}", verse);
     /// }
@@ -430,18 +435,18 @@ impl VersesNavigator {
     /// the iteration count is incremented.
     pub fn next_verse(&mut self) -> Option<&Verse> {
         let pre_current_verse = *self.current_verse();
-        let start_position = self.settings.bounds.start_position;
-        let end_position = self.settings.bounds.end_position;
+        let start_bound = self.get_start_bound();
+        let end_bound = self.get_end_bound();
         let remaining_iterations = self.settings.bounds.iteration_limit.saturating_sub(
             self.iteration_count
         );
 
-        // Before we move to the next verse, check if we have reached the end position
-        if end_position.eq(self.current_verse()) {
-            // We reached the end bound.
+        // Before we move to the next verse, check if we have reached the lower bound
+        if end_bound.eq(self.current_verse()) {
+            // We reached the lower bound.
             if remaining_iterations > 0 {
                 self.iteration_count += 1;
-                self.reset_position(start_position);
+                self.reset_position(start_bound);
                 return Some(self.current_verse());
             } else {
                 return None;
@@ -1112,17 +1117,17 @@ mod test {
     }
 
     #[test]
-    fn test_reverse_bounds_manually() {
+    fn test_bounds_validation() {
+        // Test that upper_bound must be less than lower_bound
         let settings = NavigationSettings::builder()
-            .start_position(VersePosition::new(2, 1))
-            .end_position(VersePosition::new(2, 286))
-            .reverse_bounds();
-        assert_eq!(settings.bounds.start_position, VersePosition::new(2, 286));
-        assert_eq!(settings.bounds.end_position, VersePosition::new(2, 1));
+            .upper_bound(VersePosition::new(2, 1))
+            .lower_bound(VersePosition::new(2, 286));
+        assert_eq!(settings.bounds.upper_bound, VersePosition::new(2, 1));
+        assert_eq!(settings.bounds.lower_bound, VersePosition::new(2, 286));
     }
 
     #[test]
-    fn test_reverse_bounds_automatically_with_direction_changes() {
+    fn test_bounds_remain_consistent_with_direction_changes() {
         let (mushaf, metadata) = get_mushaf();
         let mut navigator = VersesNavigator::new(
             mushaf,
@@ -1131,12 +1136,13 @@ mod test {
             Direction::Downwards
         );
 
-        let start_position = navigator.settings.bounds.start_position;
-        let end_position = navigator.settings.bounds.end_position;
+        let upper_bound = navigator.settings.bounds.upper_bound;
+        let lower_bound = navigator.settings.bounds.lower_bound;
 
         navigator = navigator.direction(Direction::Upwards);
-        assert_eq!(navigator.settings.bounds.start_position, end_position);
-        assert_eq!(navigator.settings.bounds.end_position, start_position);
+        // Bounds should remain the same regardless of direction
+        assert_eq!(navigator.settings.bounds.upper_bound, upper_bound);
+        assert_eq!(navigator.settings.bounds.lower_bound, lower_bound);
     }
 
     #[test]
@@ -1187,8 +1193,8 @@ mod test {
             Default::default(),
             Default::default()
         )
-            .start_position(VersePosition::new(2, 1))
-            .end_position(VersePosition::new(2, 286))
+            .upper_bound(VersePosition::new(2, 1))
+            .lower_bound(VersePosition::new(2, 286))
             .iteration_limit(1);
         navigator.reset_position(VersePosition::new(2, 1));
 

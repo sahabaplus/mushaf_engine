@@ -319,8 +319,6 @@ mod tests {
                 VersePosition::new(114, 1),
                 Direction::Upwards,
                 NavigationSettings::builder()
-                    .start_position(VersePosition::new(114, 1))
-                    .end_position(VersePosition::new(1, 7))
             )
             .expect("expect `navigate` to succeed");
 
@@ -423,8 +421,8 @@ mod tests {
         let start_bound = VersePosition::new(2, 1);
         let end_bound = VersePosition::new(2, 50);
         let settings = NavigationSettings::builder()
-            .start_position(start_bound)
-            .end_position(end_bound);
+            .upper_bound(start_bound)
+            .lower_bound(end_bound);
         let result = engine.navigate(10.0, VersePosition::start(), Default::default(), settings);
         assert!(result.is_err());
         let err = result.expect_err("expect `err` not to be None");

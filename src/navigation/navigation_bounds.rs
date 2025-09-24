@@ -16,13 +16,13 @@ use crate::navigation::VersePosition;
 /// - **n**: n complete cycles through the range
 ///
 /// ## Bounds and Direction
-/// The relationship between bounds and navigation direction is automatically handled:
-/// - **Downwards navigation**: navigates from `start_position` to `end_position`
-/// - **Upwards navigation**: bounds are automatically reversed internally
+/// The bounds define a fixed range where `upper_bound` is always less than `lower_bound`:
+/// - **Valid**: upper_bound: (1,1), lower_bound: (114,6)
+/// - **Invalid**: upper_bound: (114,6), lower_bound: (1,1)
 ///
 /// ## Iteration Behavior
-/// When the navigator reaches the `end_position`:
-/// 1. If `remaining_iterations > 0`: increment iteration count and reset to `start_position`
+/// When the navigator reaches the `lower_bound`:
+/// 1. If `remaining_iterations > 0`: increment iteration count and reset to `upper_bound`
 /// 2. If `remaining_iterations = 0`: return `None` (stop navigation)
 ///
 /// # Examples
@@ -33,22 +33,22 @@ use crate::navigation::VersePosition;
 /// // Navigate through Al-Baqarah (Sura 2) once
 /// let bounds = NavigationBounds::new(
 ///     1,                                    // iteration_limit: 1 cycle
-///     VersePosition::new(2, 1),            // start: beginning of Sura 2
-///     VersePosition::new(2, 286)           // end: end of Sura 2
+///     VersePosition::new(2, 1),            // upper_bound: beginning of Sura 2
+///     VersePosition::new(2, 286)           // lower_bound: end of Sura 2
 /// );
 ///
 /// // Navigate through Al-Fatiha (Sura 1) twice
 /// let bounds = NavigationBounds::new(
 ///     2,                                    // iteration_limit: 2 cycles
-///     VersePosition::new(1, 1),            // start: beginning of Al-Fatiha
-///     VersePosition::new(1, 7)             // end: end of Al-Fatiha
+///     VersePosition::new(1, 1),            // upper_bound: beginning of Al-Fatiha
+///     VersePosition::new(1, 7)             // lower_bound: end of Al-Fatiha
 /// );
 ///
 /// // Navigate from Al-Fatiha to Al-Baqarah without iteration
 /// let bounds = NavigationBounds::new(
 ///     0,                                    // iteration_limit: 0 (no cycling)
-///     VersePosition::new(1, 1),            // start: Al-Fatiha
-///     VersePosition::new(2, 5)             // end: 5th verse of Al-Baqarah
+///     VersePosition::new(1, 1),            // upper_bound: Al-Fatiha
+///     VersePosition::new(2, 5)             // lower_bound: 5th verse of Al-Baqarah
 /// );
 /// ```
 ///
@@ -66,17 +66,17 @@ use crate::navigation::VersePosition;
 ///
 /// # Direction Interaction
 ///
-/// The bounds are automatically adjusted based on navigation direction:
+/// The bounds define a fixed range where navigation always flows from upper_bound to lower_bound:
 ///
 /// ```rust
-/// // For downwards navigation (1→114):
-/// // start_position = (1,1), end_position = (114,6)
+/// // Valid bounds: upper_bound < lower_bound
+/// // upper_bound = (1,1), lower_bound = (114,6)
 ///
-/// // For upwards navigation (114→1):
-/// // start_position = (114,6), end_position = (1,1) (automatically reversed)
+/// // Invalid bounds: upper_bound > lower_bound (will cause validation error)
+/// // upper_bound = (114,6), lower_bound = (1,1) // This is invalid!
 /// ```
 ///
-/// This ensures that navigation always moves from start to end, regardless of direction.
+/// Navigation always moves from upper_bound to lower_bound, regardless of direction.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct NavigationBounds {
     /// Maximum number of complete cycles through the bounded range.
@@ -86,32 +86,32 @@ pub struct NavigationBounds {
     /// - **n**: n complete cycles through the range
     pub(super) iteration_limit: u32,
 
-    /// Starting position for navigation within the bounded range (inclusive).
+    /// Upper bound for navigation within the bounded range (inclusive).
     ///
-    /// When the navigator reaches the end_position and iterations remain,
-    /// it resets to this position to begin a new cycle.
-    pub(super) start_position: VersePosition,
+    /// This must be less than lower_bound. When the navigator reaches the lower_bound
+    /// and iterations remain, it resets to this position to begin a new cycle.
+    pub(super) upper_bound: VersePosition,
 
-    /// Ending position for navigation within the bounded range (inclusive).
+    /// Lower bound for navigation within the bounded range (inclusive).
     ///
-    /// When this position is reached, the navigator either:
-    /// - Resets to start_position (if iterations remain)
+    /// This must be greater than upper_bound. When this position is reached, the navigator either:
+    /// - Resets to upper_bound (if iterations remain)
     /// - Returns None to stop navigation (if no iterations remain)
-    pub(super) end_position: VersePosition,
+    pub(super) lower_bound: VersePosition,
 }
 
 impl Default for NavigationBounds {
     /// Creates default bounds with no iteration limit and full Quran range.
     ///
     /// - `iteration_limit`: 0 (no cycling)
-    /// - `start_position`: (1, 1) - beginning of Al-Fatiha
-    /// - `end_position`: (114, 6) - end of An-Nas
+    /// - `upper_bound`: (1, 1) - beginning of Al-Fatiha
+    /// - `lower_bound`: (114, 6) - end of An-Nas
     #[must_use]
     fn default() -> Self {
         Self {
             iteration_limit: 0,
-            start_position: VersePosition::start(),
-            end_position: VersePosition::end(),
+            upper_bound: VersePosition::start(),
+            lower_bound: VersePosition::end(),
         }
     }
 }
@@ -121,8 +121,11 @@ impl NavigationBounds {
     ///
     /// # Arguments
     /// * `iteration_limit` - Maximum number of complete cycles through the range
-    /// * `start_position` - Starting position for navigation
-    /// * `end_position` - Ending position for navigation
+    /// * `upper_bound` - Upper bound for navigation (must be less than lower_bound)
+    /// * `lower_bound` - Lower bound for navigation (must be greater than upper_bound)
+    ///
+    /// # Panics
+    /// Panics if `upper_bound >= lower_bound` as this violates the bounds constraint.
     ///
     /// # Examples
     ///
@@ -132,17 +135,18 @@ impl NavigationBounds {
     /// // Create bounds for Al-Fatiha with 3 iterations
     /// let bounds = NavigationBounds::new(
     ///     3,
-    ///     VersePosition::new(1, 1),
-    ///     VersePosition::new(1, 7)
+    ///     VersePosition::new(1, 1),  // upper_bound
+    ///     VersePosition::new(1, 7)   // lower_bound
     /// );
     /// ```
     #[must_use]
-    pub const fn new(
+    pub fn new(
         iteration_limit: u32,
-        start_position: VersePosition,
-        end_position: VersePosition
+        upper_bound: VersePosition,
+        lower_bound: VersePosition
     ) -> Self {
-        Self { iteration_limit, start_position, end_position }
+        assert!(upper_bound < lower_bound, "upper_bound must be less than lower_bound");
+        Self { iteration_limit, upper_bound, lower_bound }
     }
 
     /// Sets the iteration limit for the bounds.
@@ -164,10 +168,13 @@ impl NavigationBounds {
         self
     }
 
-    /// Sets the start position for the bounds.
+    /// Sets the upper bound for the bounds.
     ///
     /// # Arguments
-    /// * `start_position` - Starting position for navigation
+    /// * `upper_bound` - Upper bound for navigation (must be less than lower_bound)
+    ///
+    /// # Panics
+    /// Panics if the new upper_bound is not less than the current lower_bound.
     ///
     /// # Examples
     ///
@@ -175,18 +182,22 @@ impl NavigationBounds {
     /// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
     ///
     /// let bounds = NavigationBounds::default()
-    ///     .start_position(VersePosition::new(2, 1)); // Start from Al-Baqarah
+    ///     .upper_bound(VersePosition::new(2, 1)); // Upper bound at Al-Baqarah
     /// ```
     #[must_use]
-    pub fn start_position(mut self, start_position: VersePosition) -> Self {
-        self.start_position = start_position;
+    pub fn upper_bound(mut self, upper_bound: VersePosition) -> Self {
+        assert!(upper_bound < self.lower_bound, "upper_bound must be less than lower_bound");
+        self.upper_bound = upper_bound;
         self
     }
 
-    /// Sets the end position for the bounds.
+    /// Sets the lower bound for the bounds.
     ///
     /// # Arguments
-    /// * `end_position` - Ending position for navigation
+    /// * `lower_bound` - Lower bound for navigation (must be greater than upper_bound)
+    ///
+    /// # Panics
+    /// Panics if the new lower_bound is not greater than the current upper_bound.
     ///
     /// # Examples
     ///
@@ -194,11 +205,12 @@ impl NavigationBounds {
     /// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
     ///
     /// let bounds = NavigationBounds::default()
-    ///     .end_position(VersePosition::new(2, 286)); // End at Al-Baqarah
+    ///     .lower_bound(VersePosition::new(2, 286)); // Lower bound at end of Al-Baqarah
     /// ```
     #[must_use]
-    pub fn end_position(mut self, end_position: VersePosition) -> Self {
-        self.end_position = end_position;
+    pub fn lower_bound(mut self, lower_bound: VersePosition) -> Self {
+        assert!(self.upper_bound < lower_bound, "lower_bound must be greater than upper_bound");
+        self.lower_bound = lower_bound;
         self
     }
 }

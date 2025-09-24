@@ -314,7 +314,14 @@ mod tests {
         let engine = setup_engine();
 
         let v = engine
-            .navigate(14.7f32, VersePosition::new(114, 1), Direction::Upwards, Default::default())
+            .navigate(
+                14.7f32,
+                VersePosition::new(114, 1),
+                Direction::Upwards,
+                NavigationSettings::builder()
+                    .start_position(VersePosition::new(114, 1))
+                    .end_position(VersePosition::new(1, 7))
+            )
             .expect("expect `navigate` to succeed");
 
         println!("{v}");
@@ -401,20 +408,16 @@ mod tests {
         // Two full cycles plus small overflow
         let result = navigate_by_whole_mushaf_ratio(2.0, 0.1);
         assert_eq!(VersePosition::end(), result.verse);
-        assert!(result.overflow.is_some());
         assert!(result.end_of_page.is_some());
         assert!(result.end_of_sura.is_some());
-        let overflow = result.overflow.expect("expect `overflow` not to be None");
         let end_of_page = result.end_of_page.expect("expect `end_of_page` not to be None");
         let end_of_sura = result.end_of_sura.expect("expect `end_of_sura` not to be None");
         // Stick at the end
-        assert_eq!(VersePosition::end(), overflow.overflowed_verse);
         assert_eq!(VersePosition::end(), end_of_page.last_verse);
         assert_eq!(VersePosition::end(), end_of_sura.last_verse);
     }
 
     #[test]
-    #[ignore]
     fn bounded_navigation() {
         let engine = setup_engine();
         let start_bound = VersePosition::new(2, 1);

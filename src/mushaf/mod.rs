@@ -1,4 +1,5 @@
 /// Modules
+#[allow(clippy::module_inception)]
 mod mushaf;
 mod quran_metadata;
 mod verse;

@@ -165,11 +165,11 @@ impl VersesNavigator {
     ///
     /// ```ignore
     /// use rust_quran_engine::navigation::{VersesNavigator, VersePosition, Direction};
-    /// // let navigator = VersesNavigator::builder(mushaf, metadata)
-    /// //     .upper_bound(VersePosition::new(2, 1))
-    /// //     .lower_bound(VersePosition::new(2, 50))
-    /// //     .iteration_limit(1)
-    /// //     .direction(Direction::Upwards);
+    /// let navigator = VersesNavigator::builder(mushaf, metadata)
+    ///     .upper_bound(VersePosition::new(2, 1))
+    ///     .lower_bound(VersePosition::new(2, 50))
+    ///     .iteration_limit(1)
+    ///     .direction(Direction::Upwards);
     /// ```
     #[must_use]
     pub fn builder(mushaf: Rc<Mushaf>, metadata: Rc<QuranMetadata>) -> Self {

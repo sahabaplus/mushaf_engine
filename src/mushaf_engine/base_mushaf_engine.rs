@@ -1,7 +1,7 @@
 use crate::{ mushaf::{ Mushaf, QuranMetadata, SuraInfo, Verse }, navigation::* };
 use std::rc::Rc;
 
-use super::{ IMushafEngine };
+use super::IMushafEngine;
 
 /// Basic implementation of the Mushaf navigation engine using King Fahad Mushaf
 pub struct BaseMushafEngine {
@@ -141,7 +141,7 @@ impl IMushafEngine for BaseMushafEngine {
         loop {
             let current_verse = navigator.current_verse();
             // We looped twice and stuck at the same verse
-            if previous_verse == *current_verse && (lines - remaining_lines).abs() > f32::EPSILON {
+            if &previous_verse == current_verse && (lines - remaining_lines).abs() > f32::EPSILON {
                 break;
             }
             let current_sura_info = self.quran_metadata
@@ -166,7 +166,7 @@ impl IMushafEngine for BaseMushafEngine {
             remaining_lines = diff;
             previous_verse = *current_verse;
 
-            if remaining_lines > 0.0 {
+            if remaining_lines > f32::EPSILON {
                 navigator.next_verse();
             } else {
                 break;
@@ -200,7 +200,8 @@ impl IMushafEngine for BaseMushafEngine {
     ) -> Result<f32, CalculatingLinesError> {
         let (start, end) = (start.into(), end.into());
         let is_wrong_direction = VersesNavigator::is_wrong_direction(start, end, direction);
-        if is_wrong_direction {
+        let out_of_bounds = self.navigator.is_out_of_bounds(start);
+        if is_wrong_direction && out_of_bounds {
             return Err(CalculatingLinesError::WrongBoundary);
         }
 
@@ -217,13 +218,15 @@ impl IMushafEngine for BaseMushafEngine {
         let mut lines = 0.0;
         loop {
             let verse_lines = navigator.calculate_verse_lines(navigator.current_verse());
-            lines = ((lines + verse_lines) * 100.0).round() / 100.0;
+            lines += verse_lines;
             if navigator.current_verse() == end_verse_data {
                 break;
             }
             navigator.next_verse();
         }
 
+        // Round lines to 2 decimal places
+        lines = (lines * 100.0).round() / 100.0;
         Ok(lines)
     }
 
@@ -240,11 +243,9 @@ impl IMushafEngine for BaseMushafEngine {
 }
 #[cfg(test)]
 mod tests {
-    use std::{ path::PathBuf, rc::Rc };
-    use colored::Colorize;
     use crate::{
         king_fahad_mushaf::{ JsonVerse, KingFahadMushaf },
-        mushaf_engine::{ base_mushaf_engine::BaseMushafEngine, IMushafEngine },
+        mushaf_engine::{ IMushafEngine, base_mushaf_engine::BaseMushafEngine },
         navigation::{
             Direction,
             LookupError,
@@ -255,6 +256,8 @@ mod tests {
             VersesNavigator,
         },
     };
+    use colored::Colorize;
+    use std::{ path::PathBuf, rc::Rc };
 
     fn setup_engine() -> BaseMushafEngine {
         let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -458,5 +461,43 @@ mod tests {
         let verse = result.expect("expect `result` not to be None").verse;
         assert_eq!(verse.sura, 2);
         assert_eq!(verse.number, 10);
+    }
+
+    #[test]
+    fn calculate_lines_with_bounds() {
+        let engine = setup_engine();
+        let start_bound = VersePosition::new(2, 1);
+        let end_bound = VersePosition::new(2, 286);
+        let settings = NavigationSettings::builder()
+            .iteration_limit(2)
+            .upper_bound(start_bound)
+            .lower_bound(end_bound);
+
+        let full_sura_lines_metadata = engine.quran_metadata
+            .get_sura_info(2)
+            .expect("expect `full_sura` not to be None").lines_with_header;
+        let full_sura_in_normal_direction = engine.calculate_lines(
+            VersePosition::new(2, 1),
+            VersePosition::new(2, 286),
+            Direction::Downwards,
+            Default::default()
+        );
+        let lines = engine.calculate_lines(
+            VersePosition::new(2, 280),
+            VersePosition::new(2, 279),
+            Direction::Downwards,
+            settings
+        );
+        assert!(full_sura_in_normal_direction.is_ok());
+        assert!(lines.is_ok());
+
+        let full_sura_in_normal_direction = full_sura_in_normal_direction.expect(
+            "expect `full_sura_in_normal_direction` not to be None"
+        );
+        let lines = lines.expect("expect `lines` not to be None");
+
+        // They should be the same
+        assert_eq!(full_sura_in_normal_direction, lines);
+        assert_eq!(full_sura_in_normal_direction, full_sura_lines_metadata);
     }
 }

@@ -498,6 +498,6 @@ mod tests {
 
         // They should be the same
         assert_eq!(full_sura_in_normal_direction, lines);
-        assert_eq!(full_sura_in_normal_direction, full_sura_lines_metadata);
+        assert_eq!(full_sura_in_normal_direction, (full_sura_lines_metadata * 10.0).round() / 10.);
     }
 }

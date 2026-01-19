@@ -16,9 +16,11 @@ use crate::navigation::VersePosition;
 /// - **n**: n complete cycles through the range
 ///
 /// ## Bounds and Direction
-/// The bounds define a fixed range where `upper_bound` is always less than `lower_bound`:
-/// - **Valid**: upper_bound: (1,1), lower_bound: (114,6)
-/// - **Invalid**: upper_bound: (114,6), lower_bound: (1,1)
+/// The bounds can work in two modes:
+/// - **Inclusive mode** (`upper_bound < lower_bound`): Navigate from upper_bound to lower_bound (inclusive)
+///   - Example: upper_bound: (1,1), lower_bound: (114,6) - navigate entire Quran
+/// - **Excluding mode** (`upper_bound > lower_bound`): Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
+///   - Example: upper_bound: (2,50), lower_bound: (2,1) - navigate everywhere except verses 1-50 of Sura 2
 ///
 /// ## Iteration Behavior
 /// When the navigator reaches the `lower_bound`:
@@ -66,17 +68,22 @@ use crate::navigation::VersePosition;
 ///
 /// # Direction Interaction
 ///
-/// The bounds define a fixed range where navigation always flows from upper_bound to lower_bound:
+/// The bounds can work in two modes:
 ///
 /// ```rust
-/// // Valid bounds: upper_bound < lower_bound
-/// // upper_bound = (1,1), lower_bound = (114,6)
+/// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
 ///
-/// // Invalid bounds: upper_bound > lower_bound (will cause validation error)
-/// // upper_bound = (114,6), lower_bound = (1,1) // This is invalid!
+/// // Inclusive mode: upper_bound < lower_bound
+/// // Navigate from (1,1) to (114,6) - entire Quran
+/// let bounds = NavigationBounds::new(0, VersePosition::new(1, 1), VersePosition::new(114, 6));
+///
+/// // Excluding mode: upper_bound > lower_bound
+/// // Navigate everywhere EXCEPT from (2,1) to (2,50)
+/// let bounds = NavigationBounds::new(0, VersePosition::new(2, 50), VersePosition::new(2, 1));
 /// ```
 ///
-/// Navigation always moves from upper_bound to lower_bound, regardless of direction.
+/// In inclusive mode, navigation moves from upper_bound to lower_bound.
+/// In excluding mode, navigation skips the excluded range automatically.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct NavigationBounds {
     /// Maximum number of complete cycles through the bounded range.
@@ -121,11 +128,12 @@ impl NavigationBounds {
     ///
     /// # Arguments
     /// * `iteration_limit` - Maximum number of complete cycles through the range
-    /// * `upper_bound` - Upper bound for navigation (must be less than lower_bound)
-    /// * `lower_bound` - Lower bound for navigation (must be greater than upper_bound)
+    /// * `upper_bound` - Upper bound for navigation
+    /// * `lower_bound` - Lower bound for navigation
     ///
-    /// # Panics
-    /// Panics if `upper_bound >= lower_bound` as this violates the bounds constraint.
+    /// # Bounds Behavior
+    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
+    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
     ///
     /// # Examples
     ///
@@ -138,6 +146,13 @@ impl NavigationBounds {
     ///     VersePosition::new(1, 1),  // upper_bound
     ///     VersePosition::new(1, 7)   // lower_bound
     /// );
+    ///
+    /// // Exclude a range: navigate everywhere except from (2, 1) to (2, 50)
+    /// let bounds = NavigationBounds::new(
+    ///     0,
+    ///     VersePosition::new(2, 50),  // upper_bound > lower_bound
+    ///     VersePosition::new(2, 1)      // lower_bound
+    /// );
     /// ```
     #[must_use]
     pub fn new(
@@ -145,7 +160,6 @@ impl NavigationBounds {
         upper_bound: VersePosition,
         lower_bound: VersePosition
     ) -> Self {
-        assert!(upper_bound < lower_bound, "upper_bound must be less than lower_bound");
         Self { iteration_limit, upper_bound, lower_bound }
     }
 
@@ -171,10 +185,11 @@ impl NavigationBounds {
     /// Sets the upper bound for the bounds.
     ///
     /// # Arguments
-    /// * `upper_bound` - Upper bound for navigation (must be less than lower_bound)
+    /// * `upper_bound` - Upper bound for navigation
     ///
-    /// # Panics
-    /// Panics if the new upper_bound is not less than the current lower_bound.
+    /// # Bounds Behavior
+    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
+    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
     ///
     /// # Examples
     ///
@@ -186,7 +201,6 @@ impl NavigationBounds {
     /// ```
     #[must_use]
     pub fn upper_bound(mut self, upper_bound: VersePosition) -> Self {
-        assert!(upper_bound < self.lower_bound, "upper_bound must be less than lower_bound");
         self.upper_bound = upper_bound;
         self
     }
@@ -194,10 +208,11 @@ impl NavigationBounds {
     /// Sets the lower bound for the bounds.
     ///
     /// # Arguments
-    /// * `lower_bound` - Lower bound for navigation (must be greater than upper_bound)
+    /// * `lower_bound` - Lower bound for navigation
     ///
-    /// # Panics
-    /// Panics if the new lower_bound is not greater than the current upper_bound.
+    /// # Bounds Behavior
+    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
+    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
     ///
     /// # Examples
     ///
@@ -209,8 +224,36 @@ impl NavigationBounds {
     /// ```
     #[must_use]
     pub fn lower_bound(mut self, lower_bound: VersePosition) -> Self {
-        assert!(self.upper_bound < lower_bound, "lower_bound must be greater than upper_bound");
         self.lower_bound = lower_bound;
         self
+    }
+
+    /// Checks if the bounds are in excluding mode.
+    ///
+    /// # Returns
+    /// * `true` - Excluding mode (upper_bound > lower_bound): navigate everywhere except the excluded range
+    /// * `false` - Inclusive mode (upper_bound <= lower_bound): navigate within the range
+    ///
+    /// # Note
+    /// Excluding mode currently only works correctly with `Direction::Downwards`.
+    /// `Direction::Upwards` uses per-sura forward navigation and doesn't support
+    /// verse-by-verse backwards navigation through excluded ranges.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
+    ///
+    /// // Inclusive mode
+    /// let inclusive = NavigationBounds::new(0, VersePosition::new(1, 1), VersePosition::new(1, 7));
+    /// assert!(!inclusive.is_excluding_mode());
+    ///
+    /// // Excluding mode
+    /// let excluding = NavigationBounds::new(0, VersePosition::new(1, 7), VersePosition::new(1, 1));
+    /// assert!(excluding.is_excluding_mode());
+    /// ```
+    #[must_use]
+    pub fn is_excluding_mode(&self) -> bool {
+        self.upper_bound > self.lower_bound
     }
 }

@@ -11,7 +11,9 @@ use crate::navigation::{ NavigationBounds, VersePosition };
 /// ## Bounds Control
 /// The `bounds` field contains a `NavigationBounds` that defines:
 /// - Iteration limits (how many cycles through a range)
-/// - Upper and lower bounds for navigation (upper_bound < lower_bound)
+/// - Upper and lower bounds for navigation
+///   - **Inclusive mode** (`upper_bound < lower_bound`): Navigate from upper_bound to lower_bound
+///   - **Excluding mode** (`upper_bound > lower_bound`): Navigate everywhere EXCEPT from lower_bound to upper_bound
 ///
 /// ## Header Handling
 /// The `ignore_sura_header` field controls whether sura headers (bismillah and sura titles)
@@ -19,11 +21,11 @@ use crate::navigation::{ NavigationBounds, VersePosition };
 /// - `false` (default): Include sura headers in line calculations
 /// - `true`: Exclude sura headers from line calculations
 ///
-/// # Bounds Validation
+/// # Bounds Modes
 ///
-/// Navigation bounds enforce that upper_bound must always be less than lower_bound:
-/// - Valid: upper_bound=(1,1), lower_bound=(114,6)
-/// - Invalid: upper_bound=(114,6), lower_bound=(1,1) (will panic)
+/// Navigation bounds support two modes:
+/// - **Inclusive mode**: upper_bound < lower_bound (e.g., upper_bound=(1,1), lower_bound=(114,6))
+/// - **Excluding mode**: upper_bound > lower_bound (e.g., upper_bound=(2,50), lower_bound=(2,1)) - navigates everywhere except the excluded range
 ///
 /// # Examples
 ///
@@ -194,18 +196,25 @@ impl NavigationSettings {
     /// Sets the upper bound for navigation.
     ///
     /// # Arguments
-    /// * `upper_bound` - Upper bound for navigation (must be less than lower_bound)
+    /// * `upper_bound` - Upper bound for navigation
     ///
-    /// # Panics
-    /// Panics if the new upper_bound is not less than the current lower_bound.
+    /// # Bounds Behavior
+    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
+    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
     ///
     /// # Examples
     ///
     /// ```rust
     /// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
     ///
+    /// // Normal inclusive mode
     /// let settings = NavigationSettings::builder()
     ///     .upper_bound(VersePosition::new(2, 1)); // Upper bound at Al-Baqarah
+    ///
+    /// // Excluding mode - navigate everywhere except verses 1-50 of Sura 2
+    /// let settings = NavigationSettings::builder()
+    ///     .upper_bound(VersePosition::new(2, 50))
+    ///     .lower_bound(VersePosition::new(2, 1));
     /// ```
     #[must_use]
     pub fn upper_bound(mut self, upper_bound: VersePosition) -> Self {
@@ -216,18 +225,25 @@ impl NavigationSettings {
     /// Sets the lower bound for navigation.
     ///
     /// # Arguments
-    /// * `lower_bound` - Lower bound for navigation (must be greater than upper_bound)
+    /// * `lower_bound` - Lower bound for navigation
     ///
-    /// # Panics
-    /// Panics if the new lower_bound is not greater than the current upper_bound.
+    /// # Bounds Behavior
+    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
+    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
     ///
     /// # Examples
     ///
     /// ```rust
     /// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
     ///
+    /// // Normal inclusive mode
     /// let settings = NavigationSettings::builder()
     ///     .lower_bound(VersePosition::new(2, 286)); // Lower bound at end of Al-Baqarah
+    ///
+    /// // Excluding mode - navigate everywhere except verses 1-50 of Sura 2
+    /// let settings = NavigationSettings::builder()
+    ///     .upper_bound(VersePosition::new(2, 50))
+    ///     .lower_bound(VersePosition::new(2, 1));
     /// ```
     #[must_use]
     pub fn lower_bound(mut self, lower_bound: VersePosition) -> Self {

@@ -1,4 +1,4 @@
-use std::{ error::Error, fmt::Display };
+use std::{error::Error, fmt::Display};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum NavigationError {

@@ -1,4 +1,4 @@
-use std::{ fmt::Debug, rc::Rc };
+use std::{fmt::Debug, rc::Rc};
 
 use super::verse::Verse;
 
@@ -28,10 +28,7 @@ impl Page {
     /// A new Page instance
     #[must_use]
     pub const fn new(number: u16, verses: Rc<[Verse]>) -> Self {
-        Self {
-            number,
-            verses,
-        }
+        Self { number, verses }
     }
 
     /// Get the page number

@@ -1,5 +1,5 @@
+use super::{LastVerseResult, OverflowResult};
 use crate::mushaf::Verse;
-use super::{ LastVerseResult, OverflowResult };
 
 #[cfg(feature = "colored_output")]
 use colored::Colorize;
@@ -43,7 +43,7 @@ impl NavigationResult {
         overflow: Option<OverflowResult>,
         end_of_page: Option<LastVerseResult>,
         end_of_sura: Option<LastVerseResult>,
-        distance_moved: f32
+        distance_moved: f32,
     ) -> Self {
         let remaining_distance = overflow
             .as_ref()
@@ -143,7 +143,7 @@ impl NavigationResult {
     pub const fn new_page_boundary(
         verse: Verse,
         last_of_page: LastVerseResult,
-        distance_moved: f32
+        distance_moved: f32,
     ) -> Self {
         Self {
             verse,
@@ -168,7 +168,7 @@ impl NavigationResult {
     pub const fn new_sura_boundary(
         verse: Verse,
         last_of_sura: LastVerseResult,
-        distance_moved: f32
+        distance_moved: f32,
     ) -> Self {
         Self {
             verse,

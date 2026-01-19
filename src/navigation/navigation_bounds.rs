@@ -158,9 +158,13 @@ impl NavigationBounds {
     pub fn new(
         iteration_limit: u32,
         upper_bound: VersePosition,
-        lower_bound: VersePosition
+        lower_bound: VersePosition,
     ) -> Self {
-        Self { iteration_limit, upper_bound, lower_bound }
+        Self {
+            iteration_limit,
+            upper_bound,
+            lower_bound,
+        }
     }
 
     /// Sets the iteration limit for the bounds.

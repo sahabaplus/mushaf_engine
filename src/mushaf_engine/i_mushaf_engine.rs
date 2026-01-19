@@ -1,15 +1,10 @@
-use std::{ error::Error, fmt::Display };
+use std::{error::Error, fmt::Display};
 
 use crate::{
-    mushaf::{ SuraInfo, Verse },
+    mushaf::{SuraInfo, Verse},
     navigation::{
-        CalculatingLinesError,
-        Direction,
-        LookupError,
-        NavigationError,
-        NavigationResult,
-        NavigationSettings,
-        VersePosition,
+        CalculatingLinesError, Direction, LookupError, NavigationError, NavigationResult,
+        NavigationSettings, VersePosition,
     },
 };
 
@@ -46,7 +41,7 @@ pub trait IMushafEngine {
         lines: f32,
         from: impl Into<VersePosition>,
         direction: Direction,
-        settings: NavigationSettings
+        settings: NavigationSettings,
     ) -> Result<NavigationResult, NavigationError>;
 
     /// Get metadata about a specific Sura
@@ -80,7 +75,7 @@ pub trait IMushafEngine {
         start: impl Into<VersePosition>,
         end: impl Into<VersePosition>,
         direction: Direction,
-        settings: NavigationSettings
+        settings: NavigationSettings,
     ) -> Result<f32, CalculatingLinesError>;
 
     /// Find the next verse from a given verse in the specified direction
@@ -96,6 +91,6 @@ pub trait IMushafEngine {
         &self,
         from: impl Into<VersePosition>,
         direction: Direction,
-        settings: NavigationSettings
+        settings: NavigationSettings,
     ) -> Option<Verse>;
 }

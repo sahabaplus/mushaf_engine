@@ -1,4 +1,4 @@
-use crate::navigation::{ NavigationBounds, VersePosition };
+use crate::navigation::{NavigationBounds, VersePosition};
 
 /// Comprehensive settings for verse navigation behavior.
 ///
@@ -104,7 +104,10 @@ impl NavigationSettings {
     /// * `bounds` - Navigation bounds containing iteration limits and positions
     #[must_use]
     pub const fn new(ignore_sura_header: bool, bounds: NavigationBounds) -> Self {
-        Self { ignore_sura_header, bounds }
+        Self {
+            ignore_sura_header,
+            bounds,
+        }
     }
 
     /// Creates a builder for navigation settings with default values.

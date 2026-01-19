@@ -16,7 +16,11 @@ impl BaseMushafEngine {
     pub fn new(mushaf: Rc<Mushaf>) -> Self {
         let quran_metadata = Rc::new(QuranMetadata::from_mushaf(&mushaf));
         let navigator = VersesNavigator::builder(mushaf.clone(), quran_metadata.clone());
-        Self { mushaf, quran_metadata, navigator }
+        Self {
+            mushaf,
+            quran_metadata,
+            navigator,
+        }
     }
 
     /// Get metadata about a specific Sura
@@ -34,10 +38,11 @@ impl BaseMushafEngine {
         current_verse: &Verse,
         direction: Direction
     ) -> LastVerseResult {
-        if let Some(last_result) = &last_of_sura {
-            if current_verse.sura == last_result.last_verse.sura {
-                return last_result.clone();
-            }
+        if
+            let Some(last_result) = &last_of_sura &&
+            current_verse.sura == last_result.last_verse.sura
+        {
+            return last_result.clone();
         }
 
         let sura = self.quran_metadata
@@ -52,10 +57,11 @@ impl BaseMushafEngine {
                 .calculate_lines(*current_verse, *last_verse, direction, Default::default())
                 .expect("Lines calculation should succeed") - current_verse.lines;
 
-        if let Some(existing_last) = last_of_sura {
-            if existing_last.lines_distance.abs() + 3.0 < lines_distance.abs() {
-                return existing_last;
-            }
+        if
+            let Some(existing_last) = last_of_sura &&
+            existing_last.lines_distance.abs() + 3.0 < lines_distance.abs()
+        {
+            return existing_last;
         }
 
         LastVerseResult::new(lines_distance, *last_verse)
@@ -67,10 +73,8 @@ impl BaseMushafEngine {
         current_verse: &Verse,
         direction: Direction
     ) -> Option<LastVerseResult> {
-        if let Some(existing_last) = &last_of_page {
-            if *current_verse == existing_last.last_verse {
-                return last_of_page;
-            }
+        if let Some(existing_last) = &last_of_page && *current_verse == existing_last.last_verse {
+            return last_of_page;
         }
 
         let (_, page, _idx) = self.navigator.find_verse(*current_verse).ok()?;
@@ -84,10 +88,11 @@ impl BaseMushafEngine {
             .calculate_lines(*current_verse, *new_last_of_page, direction, Default::default())
             .ok()?;
 
-        if let Some(existing_last) = last_of_page {
-            if existing_last.lines_distance.abs() + 1.0 < lines_distance.abs() {
-                return Some(existing_last);
-            }
+        if
+            let Some(existing_last) = last_of_page &&
+            existing_last.lines_distance.abs() + 1.0 < lines_distance.abs()
+        {
+            return Some(existing_last);
         }
 
         Some(LastVerseResult::new(lines_distance, *new_last_of_page))
@@ -222,7 +227,12 @@ impl IMushafEngine for BaseMushafEngine {
             if navigator.current_verse() == end_verse_data {
                 break;
             }
-            navigator.next_verse();
+
+            // Check if next_verse() returns None to prevent infinite loop
+            if navigator.next_verse().is_none() {
+                // If we couldn't reach the end verse, return an error
+                return Err(CalculatingLinesError::WrongBoundary);
+            }
         }
 
         // Round lines to 2 decimal places
@@ -498,6 +508,214 @@ mod tests {
 
         // They should be the same
         assert_eq!(full_sura_in_normal_direction, lines);
-        assert_eq!(full_sura_in_normal_direction, (full_sura_lines_metadata * 10.0).round() / 10.);
+        assert_eq!(full_sura_in_normal_direction, (full_sura_lines_metadata * 10.0).round() / 10.0);
+    }
+
+    #[test]
+    fn calculate_lines_with_excluding_bounds() {
+        let engine = setup_engine();
+
+        // Test 1: Exclude verses 10-20 in sura 2 (exclusive bounds) - Downwards direction
+        // Excluding bounds: lower_bound=(2,10), upper_bound=(2,20)
+        // This means: exclude verses strictly between (2,10) and (2,20), i.e., verses 11-19
+        let excluding_settings = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(2, 20)) // upper > lower = excluding mode
+            .lower_bound(VersePosition::new(2, 10));
+
+        // Calculate lines from (2,1) to (2,30) with excluding bounds
+        // Expected: include verses 1-10, skip 11-19, include 20-30
+        let lines_with_excluding = engine
+            .calculate_lines(
+                VersePosition::new(2, 1),
+                VersePosition::new(2, 30),
+                Direction::Downwards,
+                excluding_settings
+            )
+            .expect("Should calculate lines");
+
+        // Directly calculate what should be included: verses 1-10 and 20-30
+        let lines_1_to_10 = engine
+            .calculate_lines(
+                VersePosition::new(2, 1),
+                VersePosition::new(2, 10),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        let lines_20_to_30 = engine
+            .calculate_lines(
+                VersePosition::new(2, 20),
+                VersePosition::new(2, 30),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        let expected_lines = lines_1_to_10 + lines_20_to_30;
+        assert!(
+            (lines_with_excluding - expected_lines).abs() < 0.1,
+            "Downwards: Expected {} lines (verses 1-10 + 20-30), got {} lines",
+            expected_lines,
+            lines_with_excluding
+        );
+
+        // Test 2: Downwards with different range
+        // Test excluding verses 50-100 in sura 2
+        let excluding_settings_2 = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(2, 100))
+            .lower_bound(VersePosition::new(2, 50));
+
+        let lines_with_excluding_2 = engine
+            .calculate_lines(
+                VersePosition::new(2, 1),
+                VersePosition::new(2, 150),
+                Direction::Downwards,
+                excluding_settings_2
+            )
+            .expect("Should calculate lines");
+
+        // Calculate what should be included: verses 1-50 and 100-150
+        let lines_1_to_50 = engine
+            .calculate_lines(
+                VersePosition::new(2, 1),
+                VersePosition::new(2, 50),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        let lines_100_to_150 = engine
+            .calculate_lines(
+                VersePosition::new(2, 100),
+                VersePosition::new(2, 150),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        let expected_lines_2 = lines_1_to_50 + lines_100_to_150;
+        assert!(
+            (lines_with_excluding_2 - expected_lines_2).abs() < 0.1,
+            "Downwards 2: Expected {} lines (verses 1-50 + 100-150), got {} lines",
+            expected_lines_2,
+            lines_with_excluding_2
+        );
+
+        // Test 3: Cross-sura excluding bounds - Downwards direction
+        // Exclude verses between (1,5) and (2,5) - should skip verses 1:6-7 and 2:1-4
+        let cross_sura_excluding = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(2, 5))
+            .lower_bound(VersePosition::new(1, 5));
+
+        // Calculate from (1,1) to (2,10) with excluding bounds
+        // Expected: include (1,1-5), skip (1,6-7) and (2,1-4), include (2,5-10)
+        let lines_cross_sura_down = engine
+            .calculate_lines(
+                VersePosition::new(1, 1),
+                VersePosition::new(2, 10),
+                Direction::Downwards,
+                cross_sura_excluding
+            )
+            .expect("Should calculate lines");
+
+        // Directly calculate what should be included
+        let sura1_included = engine
+            .calculate_lines(
+                VersePosition::new(1, 1),
+                VersePosition::new(1, 5),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        let sura2_included = engine
+            .calculate_lines(
+                VersePosition::new(2, 5),
+                VersePosition::new(2, 10),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        let expected_cross_sura_down = sura1_included + sura2_included;
+        assert!(
+            (lines_cross_sura_down - expected_cross_sura_down).abs() < 0.1,
+            "Cross-sura Downwards: Expected {} lines ((1,1-5) + (2,5-10)), got {} lines",
+            expected_cross_sura_down,
+            lines_cross_sura_down
+        );
+
+        // Test 4: Another cross-sura excluding test
+        // Exclude verses between (2,100) and (3,50)
+        let cross_sura_excluding_2 = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(3, 50))
+            .lower_bound(VersePosition::new(2, 100));
+
+        let lines_cross_sura_2 = engine
+            .calculate_lines(
+                VersePosition::new(2, 50),
+                VersePosition::new(3, 100),
+                Direction::Downwards,
+                cross_sura_excluding_2
+            )
+            .expect("Should calculate lines");
+
+        // Calculate what should be included: (2,50-100) + (3,50-100)
+        let sura2_part = engine
+            .calculate_lines(
+                VersePosition::new(2, 50),
+                VersePosition::new(2, 100),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        let sura3_part = engine
+            .calculate_lines(
+                VersePosition::new(3, 50),
+                VersePosition::new(3, 100),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        let expected_cross_sura_2 = sura2_part + sura3_part;
+        assert!(
+            (lines_cross_sura_2 - expected_cross_sura_2).abs() < 0.1,
+            "Cross-sura 2: Expected {} lines ((2,50-100) + (3,50-100)), got {} lines",
+            expected_cross_sura_2,
+            lines_cross_sura_2
+        );
+
+        // Test 5: Verify excluded verses are actually skipped
+        // For cross-sura excluding, verify that excluded range has different line count
+        let excluded_range_down = engine
+            .calculate_lines(
+                VersePosition::new(1, 6),
+                VersePosition::new(2, 4),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        // The excluded range should NOT be included in the result
+        let full_range_down = engine
+            .calculate_lines(
+                VersePosition::new(1, 1),
+                VersePosition::new(2, 10),
+                Direction::Downwards,
+                Default::default()
+            )
+            .expect("Should calculate");
+
+        // With excluding, we should have: full_range - excluded_range
+        let expected_with_excluding = full_range_down - excluded_range_down;
+        assert!(
+            (lines_cross_sura_down - expected_with_excluding).abs() < 0.1,
+            "Verification: Expected {} lines (full - excluded), got {} lines",
+            expected_with_excluding,
+            lines_cross_sura_down
+        );
     }
 }

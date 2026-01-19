@@ -51,7 +51,11 @@ impl std::fmt::Display for OverflowResult {
 
         #[cfg(not(feature = "colored_output"))]
         {
-            write!(f, "Overflow lines: {}, Verse: {}", self.overflow_lines, self.overflowed_verse)
+            write!(
+                f,
+                "Overflow lines: {}, Verse: {}",
+                self.overflow_lines, self.overflowed_verse
+            )
         }
     }
 }

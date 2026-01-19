@@ -1,4 +1,4 @@
-use std::{ fmt::Display, rc::Rc };
+use std::{fmt::Display, rc::Rc};
 
 #[cfg(feature = "colored_output")]
 use colored::Colorize;
@@ -59,7 +59,12 @@ impl Display for Mushaf {
         #[cfg(feature = "colored_output")]
         {
             write!(f, "{}", "=== Mushaf Summary ===\n".bright_green().bold());
-            writeln!(f, "{}: {}", "Total Pages".yellow(), self.max_page.to_string().cyan());
+            writeln!(
+                f,
+                "{}: {}",
+                "Total Pages".yellow(),
+                self.max_page.to_string().cyan()
+            );
             writeln!(
                 f,
                 "{}: {}",
@@ -88,10 +93,7 @@ impl Display for Mushaf {
             write!(
                 f,
                 "Total Verses: {}\n",
-                self.pages
-                    .iter()
-                    .map(|p| p.verses().len())
-                    .sum::<usize>()
+                self.pages.iter().map(|p| p.verses().len()).sum::<usize>()
             )
         }
     }

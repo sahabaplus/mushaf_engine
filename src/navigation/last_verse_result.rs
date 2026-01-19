@@ -57,7 +57,11 @@ impl std::fmt::Display for LastVerseResult {
 
         #[cfg(not(feature = "colored_output"))]
         {
-            write!(f, "Lines distance: {}, Verse: {}", self.remaining_lines, self.last_verse)
+            write!(
+                f,
+                "Lines distance: {}, Verse: {}",
+                self.remaining_lines, self.last_verse
+            )
         }
     }
 }

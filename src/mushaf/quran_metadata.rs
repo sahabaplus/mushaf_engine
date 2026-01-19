@@ -1,5 +1,5 @@
-use crate::navigation::LookupError;
 use super::Mushaf;
+use crate::navigation::LookupError;
 
 /// Information about a Sura in the Quran
 #[derive(Debug, Clone)]
@@ -70,8 +70,7 @@ impl QuranMetadata {
             let total_lines_with_header = sura_lines[sura_num] + header_lines;
 
             suras.push(SuraInfo {
-                number: u8
-                    ::try_from(sura_num)
+                number: u8::try_from(sura_num)
                     .expect("expect `sura_num` to be less than `u8::MAX`"),
                 total_verses: sura_verse_count[sura_num],
                 lines: sura_lines[sura_num],
@@ -87,7 +86,11 @@ impl QuranMetadata {
     /// Convert 1-based sura number to 0-based index for internal storage
     #[inline]
     const fn sura_to_index(sura_number: u8) -> Option<usize> {
-        if Self::is_valid_sura(sura_number) { Some((sura_number - 1) as usize) } else { None }
+        if Self::is_valid_sura(sura_number) {
+            Some((sura_number - 1) as usize)
+        } else {
+            None
+        }
     }
 
     const fn is_valid_sura(sura_number: u8) -> bool {
@@ -111,17 +114,14 @@ impl QuranMetadata {
     /// Find which Sura contains a particular page
     #[must_use]
     pub fn find_sura_by_page(&self, page_number: u16) -> Option<Vec<u8>> {
-        let vec: Vec<u8> = self.suras
+        let vec: Vec<u8> = self
+            .suras
             .iter()
             .filter(|info| info.start_page <= page_number && info.end_page >= page_number)
             .map(|info| info.number)
             .collect();
 
-        if vec.is_empty() {
-            None
-        } else {
-            Some(vec)
-        }
+        if vec.is_empty() { None } else { Some(vec) }
     }
 
     /// Get total number of lines for a range of Suras
@@ -141,9 +141,10 @@ impl QuranMetadata {
         }
 
         let sum = (start_sura..=end_sura)
-            .map(|sura_num|
-                self.get_sura_info(sura_num).expect("expect `get_sura_info` to succeed")
-            )
+            .map(|sura_num| {
+                self.get_sura_info(sura_num)
+                    .expect("expect `get_sura_info` to succeed")
+            })
             .map(|info| info.lines_with_header)
             .sum();
         Ok(sum)
@@ -166,7 +167,10 @@ impl QuranMetadata {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::{ king_fahad_mushaf::{ JsonVerse, KingFahadMushaf }, mushaf::QuranMetadata };
+    use crate::{
+        king_fahad_mushaf::{JsonVerse, KingFahadMushaf},
+        mushaf::QuranMetadata,
+    };
 
     fn setup_metadata() -> QuranMetadata {
         let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -174,15 +178,15 @@ mod tests {
         data_path.push("king_fahad_mushaf.json");
 
         let mushaf = {
-            let path = data_path.to_str().expect("expect `data_path` to be a valid string");
+            let path = data_path
+                .to_str()
+                .expect("expect `data_path` to be a valid string");
             // Load from provided JSON path
-            let file_content = std::fs
-                ::read_to_string(path)
-                .expect("Failed to read mushaf data file");
+            let file_content =
+                std::fs::read_to_string(path).expect("Failed to read mushaf data file");
 
-            let pages: Vec<Vec<JsonVerse>> = serde_json
-                ::from_str(&file_content)
-                .expect("Failed to parse mushaf JSON data");
+            let pages: Vec<Vec<JsonVerse>> =
+                serde_json::from_str(&file_content).expect("Failed to parse mushaf JSON data");
 
             KingFahadMushaf::create_mushaf_from_pages(pages)
         };
@@ -197,13 +201,17 @@ mod tests {
         assert_eq!(metadata.total_suras(), 114);
 
         // Test Al-Fatiha info
-        let fatiha = metadata.get_sura_info(1).expect("expect `fatiha` not to be Err");
+        let fatiha = metadata
+            .get_sura_info(1)
+            .expect("expect `fatiha` not to be Err");
         assert_eq!(fatiha.number, 1);
         assert_eq!(fatiha.total_verses, 7); // Al-Fatiha has 7 verses
         assert!(fatiha.lines_with_header > fatiha.lines); // Should include header
 
         // Test At-Tawbah (no bismillah)
-        let tawbah = metadata.get_sura_info(9).expect("expect `tawbah` not to be Err");
+        let tawbah = metadata
+            .get_sura_info(9)
+            .expect("expect `tawbah` not to be Err");
         assert_eq!(tawbah.number, 9);
         assert!((tawbah.lines_with_header - (tawbah.lines + 1.0)).abs() < f32::EPSILON); // Only 1 line for header
 

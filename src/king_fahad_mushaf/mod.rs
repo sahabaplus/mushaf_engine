@@ -1,6 +1,6 @@
-use serde::{ de::Visitor, Deserialize, Serialize };
+use crate::mushaf::{Mushaf, Page, Verse};
+use serde::{Deserialize, Serialize, de::Visitor};
 use std::rc::Rc;
-use crate::mushaf::{ Mushaf, Page, Verse };
 
 use super::*;
 
@@ -19,13 +19,10 @@ impl KingFahadMushaf {
     /// * `serde::de::Error` if the JSON is invalid
     pub fn from_file(path: &str) -> Result<Mushaf, std::io::Error> {
         // Load from provided JSON path
-        let file_content = std::fs
-            ::read_to_string(path)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let file_content = std::fs::read_to_string(path).map_err(std::io::Error::other)?;
 
-        let pages: Vec<Vec<JsonVerse>> = serde_json
-            ::from_str(&file_content)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let pages: Vec<Vec<JsonVerse>> =
+            serde_json::from_str(&file_content).map_err(std::io::Error::other)?;
 
         Ok(Self::create_mushaf_from_pages(pages))
     }
@@ -71,8 +68,7 @@ impl KingFahadMushaf {
 
         Mushaf {
             lines_per_page: 15,
-            max_page: u16
-                ::try_from(pages.len())
+            max_page: u16::try_from(pages.len())
                 .expect("expect `pages.len()` to be less than `u16::MAX`"),
             pages: Rc::from(pages),
         }
@@ -90,8 +86,8 @@ pub struct JsonVerse {
 
 #[cfg(test)]
 mod test {
-    use colored::Colorize;
     use crate::king_fahad_mushaf::KingFahadMushaf;
+    use colored::Colorize;
 
     use std::path::PathBuf;
 
@@ -103,7 +99,9 @@ mod test {
         data_path.push("king_fahad_mushaf.json");
 
         let mushaf = KingFahadMushaf::from_file(
-            data_path.to_str().expect("expect `data_path` to be a valid string")
+            data_path
+                .to_str()
+                .expect("expect `data_path` to be a valid string"),
         );
         let mushaf = mushaf.expect("expect `mushaf` not to be `Err`");
 
@@ -118,7 +116,7 @@ mod test {
             let suras_headers: f32 = page
                 .verses()
                 .iter()
-                .map(|v| (
+                .map(|v| {
                     if v.number == 1 {
                         if v.sura == 9 {
                             // سورة التوبة, does not have بسملة
@@ -129,13 +127,13 @@ mod test {
                     } else {
                         0f32
                     }
-                ))
+                })
                 .sum();
-            let sum: f32 =
-                page
-                    .verses()
-                    .iter()
-                    .fold(0f32, |acc, e| ((acc + e.lines) * 100.0).round() / 100.0) + suras_headers;
+            let sum: f32 = page
+                .verses()
+                .iter()
+                .fold(0f32, |acc, e| ((acc + e.lines) * 100.0).round() / 100.0)
+                + suras_headers;
             println!("{:#?}", page);
             println!(
                 "\t{}:{}\n",

@@ -118,12 +118,12 @@ mod test {
         "الْفَلَقُ",
         "النَّاسُ",
     ];
-    use std::{ path::PathBuf, rc::Rc };
     use rust_quran_engine::{
-        king_fahad_mushaf::{ JsonVerse, KingFahadMushaf },
-        mushaf_engine::{ base_mushaf_engine::BaseMushafEngine, IMushafEngine },
-        navigation::{ Direction, VersePosition },
+        king_fahad_mushaf::{JsonVerse, KingFahadMushaf},
+        mushaf_engine::{IMushafEngine, base_mushaf_engine::BaseMushafEngine},
+        navigation::{Direction, VersePosition},
     };
+    use std::{path::PathBuf, rc::Rc};
 
     fn setup_engine() -> BaseMushafEngine {
         let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -131,15 +131,15 @@ mod test {
         data_path.push("king_fahad_mushaf.json");
 
         let mushaf = Rc::new({
-            let path = data_path.to_str().expect("expect `data_path` to be a valid string");
+            let path = data_path
+                .to_str()
+                .expect("expect `data_path` to be a valid string");
             // Load from provided JSON path
-            let file_content = std::fs
-                ::read_to_string(path)
-                .expect("Failed to read mushaf data file");
+            let file_content =
+                std::fs::read_to_string(path).expect("Failed to read mushaf data file");
 
-            let pages: Vec<Vec<JsonVerse>> = serde_json
-                ::from_str(&file_content)
-                .expect("Failed to parse mushaf JSON data");
+            let pages: Vec<Vec<JsonVerse>> =
+                serde_json::from_str(&file_content).expect("Failed to parse mushaf JSON data");
 
             KingFahadMushaf::create_mushaf_from_pages(pages)
         });
@@ -159,7 +159,12 @@ mod test {
         let engine = setup_engine();
 
         let v = engine
-            .navigate(15_f32, VersePosition::new(114, 1), Direction::Upwards, Default::default())
+            .navigate(
+                15_f32,
+                VersePosition::new(114, 1),
+                Direction::Upwards,
+                Default::default(),
+            )
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 112); // الإخلاص
         assert_eq!(v.verse.number, 4);
@@ -167,19 +172,34 @@ mod test {
         // println!("Verse: {}, {}", v, reverse_for_terminal(QURAN_SURAS[v.verse.sura as usize]));
 
         let v = engine
-            .navigate(30_f32, VersePosition::new(114, 1), Direction::Upwards, Default::default())
+            .navigate(
+                30_f32,
+                VersePosition::new(114, 1),
+                Direction::Upwards,
+                Default::default(),
+            )
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 109); // الكافرون
         assert_eq!(v.verse.number, 6);
 
         let v = engine
-            .navigate(45_f32, VersePosition::new(114, 1), Direction::Upwards, Default::default())
+            .navigate(
+                45_f32,
+                VersePosition::new(114, 1),
+                Direction::Upwards,
+                Default::default(),
+            )
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 106); // قريش
         assert_eq!(v.verse.number, 4);
 
         let v = engine
-            .navigate(15_f32, VersePosition::new(108, 1), Direction::Upwards, Default::default())
+            .navigate(
+                15_f32,
+                VersePosition::new(108, 1),
+                Direction::Upwards,
+                Default::default(),
+            )
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 106); // قريش
         assert_eq!(v.verse.number, 4);
@@ -190,27 +210,51 @@ mod test {
         let engine = setup_engine();
 
         let v = engine
-            .navigate(15_f32, VersePosition::new(2, 6), Direction::Downwards, Default::default())
+            .navigate(
+                15_f32,
+                VersePosition::new(2, 6),
+                Direction::Downwards,
+                Default::default(),
+            )
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 2);
         assert_eq!(v.verse.number, 16);
 
         let v = engine
-            .navigate(30_f32, VersePosition::new(2, 6), Direction::Downwards, Default::default())
+            .navigate(
+                30_f32,
+                VersePosition::new(2, 6),
+                Direction::Downwards,
+                Default::default(),
+            )
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 2);
         assert_eq!(v.verse.number, 24);
 
         let v = engine
-            .navigate(15_f32, VersePosition::new(2, 17), Direction::Downwards, Default::default())
+            .navigate(
+                15_f32,
+                VersePosition::new(2, 17),
+                Direction::Downwards,
+                Default::default(),
+            )
             .expect("expect `navigate` to succeed");
         assert_eq!(v.verse.sura, 2);
         assert_eq!(v.verse.number, 24);
 
         let v = engine
-            .navigate(30_f32, VersePosition::new(4, 171), Direction::Downwards, Default::default())
+            .navigate(
+                30_f32,
+                VersePosition::new(4, 171),
+                Direction::Downwards,
+                Default::default(),
+            )
             .expect("expect `navigate` to succeed");
-        println!("Verse: {:?}, {}", v, reverse_for_terminal(QURAN_SURAS[v.verse.sura as usize]));
+        println!(
+            "Verse: {:?}, {}",
+            v,
+            reverse_for_terminal(QURAN_SURAS[v.verse.sura as usize])
+        );
         assert_eq!(v.verse.sura, 5); // قريش
         assert_eq!(v.verse.number, 2);
     }

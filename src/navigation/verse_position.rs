@@ -1,4 +1,4 @@
-use crate::{ mushaf::Verse, navigation::LookupError };
+use crate::{mushaf::Verse, navigation::LookupError};
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct VersePosition(u8, u16);
 
@@ -38,6 +38,10 @@ impl VersePosition {
     #[must_use]
     pub const fn tuple(&self) -> (u8, u16) {
         (self.0, self.1)
+    }
+
+    pub fn to_start_of_sura(&self) -> Self {
+        Self(self.0, 1)
     }
 }
 

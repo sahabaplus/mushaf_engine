@@ -1,6 +1,6 @@
 use crate::{
-    mushaf::{ Mushaf, QuranMetadata, Verse },
-    navigation::{ LookupError, NavigationSettings, VersePosition },
+    mushaf::{Mushaf, QuranMetadata, Verse},
+    navigation::{LookupError, NavigationSettings, VersePosition},
 };
 use std::rc::Rc;
 
@@ -136,7 +136,7 @@ impl VersesNavigator {
         mushaf: Rc<Mushaf>,
         metadata: Rc<QuranMetadata>,
         settings: NavigationSettings,
-        direction: Direction
+        direction: Direction,
     ) -> Self {
         let mut s = Self {
             mushaf,
@@ -148,7 +148,8 @@ impl VersesNavigator {
             iteration_count: 0,
         };
 
-        s.reset_position(s.get_start_bound()).expect("expect `reset_position` to succeed");
+        s.reset_position(s.get_start_bound())
+            .expect("expect `reset_position` to succeed");
         s
     }
 
@@ -179,7 +180,7 @@ impl VersesNavigator {
     pub fn is_wrong_direction(
         start: impl Into<VersePosition>,
         end: impl Into<VersePosition>,
-        direction: Direction
+        direction: Direction,
     ) -> bool {
         let (start, end) = (start.into(), end.into());
         let internal_wrong_direction = start.sura() == end.sura() && start.verse() > end.verse();
@@ -209,18 +210,69 @@ impl VersesNavigator {
         self.direction = direction;
         self
     }
-
+    /// Helper to get the start bound based on the direction & bounds mode
     pub fn get_start_bound(&self) -> VersePosition {
-        match self.direction {
-            Direction::Downwards => self.settings.bounds.upper_bound,
-            Direction::Upwards => self.settings.bounds.lower_bound,
+        // In excluding mode, bounds are full Quran/sura, not the configured bounds
+        if self.settings.bounds.is_excluding_mode() {
+            match self.direction {
+                Direction::Downwards => VersePosition::start(), // (1,1)
+                Direction::Upwards => {
+                    // Start of the sura containing lower_bound
+                    self.settings.bounds.lower_bound.to_start_of_sura()
+                }
+            }
+        } else {
+            match self.direction {
+                Direction::Downwards => self.settings.bounds.upper_bound,
+                Direction::Upwards => {
+                    // Start sura of the lower bound (make sure it is in bounds, if not, use upper bound)
+                    let start_of_sura = self.settings.bounds.lower_bound.to_start_of_sura();
+                    if self.is_out_of_bounds(start_of_sura) {
+                        self.settings.bounds.upper_bound
+                    } else {
+                        start_of_sura
+                    }
+                }
+            }
         }
     }
 
+    /// Helper to get the end bound based on the direction & bounds mode
     pub fn get_end_bound(&self) -> VersePosition {
-        match self.direction {
-            Direction::Downwards => self.settings.bounds.lower_bound,
-            Direction::Upwards => self.settings.bounds.upper_bound,
+        let b = self.settings.bounds;
+
+        // In excluding mode, bounds are full Quran/sura, not the configured bounds
+        if b.is_excluding_mode() {
+            match self.direction {
+                Direction::Downwards => VersePosition::end(), // (114,6)
+                Direction::Upwards => {
+                    // End of the sura containing upper_bound
+                    let total_verses = self
+                        .quran_metadata
+                        .get_sura_info(b.upper_bound.sura())
+                        .expect("expect `sura_info` not to be None")
+                        .total_verses;
+                    VersePosition::new(b.upper_bound.sura(), total_verses)
+                }
+            }
+        } else {
+            match self.direction {
+                Direction::Downwards => b.lower_bound,
+                Direction::Upwards => {
+                    // End sura of the upper bound (make sure it is in bounds, if not, use lower bound)
+                    let end_of_sura = self
+                        .quran_metadata
+                        .get_sura_info(b.upper_bound.sura())
+                        .expect("expect `sura_info` not to be None")
+                        .total_verses;
+                    let end_of_sura = VersePosition::new(b.upper_bound.sura(), end_of_sura);
+                    if self.is_out_of_bounds(end_of_sura) {
+                        b.lower_bound
+                    } else {
+                        end_of_sura
+                    }
+                }
+            }
         }
     }
 
@@ -247,10 +299,23 @@ impl VersesNavigator {
     /// Sets the upper bound for navigation bounds.
     ///
     /// # Arguments
-    /// * `upper_bound` - Upper bound for navigation (must be less than lower_bound)
+    /// * `upper_bound` - Upper bound for navigation
     ///
-    /// # Panics
-    /// Panics if the new upper_bound is not less than the current lower_bound.
+    /// # Bounds Behavior
+    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
+    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Normal inclusive mode
+    /// let navigator = navigator.upper_bound(VersePosition::new(1, 1));
+    ///
+    /// // Excluding mode - navigate everywhere except verses 1-50 of Sura 2
+    /// let navigator = navigator
+    ///     .upper_bound(VersePosition::new(2, 50))
+    ///     .lower_bound(VersePosition::new(2, 1));
+    /// ```
     #[must_use]
     pub fn upper_bound(mut self, upper_bound: impl Into<VersePosition>) -> Self {
         self.settings.bounds.upper_bound = upper_bound.into();
@@ -260,10 +325,23 @@ impl VersesNavigator {
     /// Sets the lower bound for navigation bounds.
     ///
     /// # Arguments
-    /// * `lower_bound` - Lower bound for navigation (must be greater than upper_bound)
+    /// * `lower_bound` - Lower bound for navigation
     ///
-    /// # Panics
-    /// Panics if the new lower_bound is not greater than the current upper_bound.
+    /// # Bounds Behavior
+    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
+    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Normal inclusive mode
+    /// let navigator = navigator.lower_bound(VersePosition::new(114, 6));
+    ///
+    /// // Excluding mode - navigate everywhere except verses 1-50 of Sura 2
+    /// let navigator = navigator
+    ///     .upper_bound(VersePosition::new(2, 50))
+    ///     .lower_bound(VersePosition::new(2, 1));
+    /// ```
     #[must_use]
     pub fn lower_bound(mut self, lower_bound: impl Into<VersePosition>) -> Self {
         self.settings.bounds.lower_bound = lower_bound.into();
@@ -292,7 +370,7 @@ impl VersesNavigator {
     /// * `LookupError::InvalidVerse` if the verse number is invalid
     pub fn reset_position(
         &mut self,
-        verse: impl Into<VersePosition>
+        verse: impl Into<VersePosition>,
     ) -> Result<&Verse, LookupError> {
         let verse = verse.into();
         if self.is_out_of_bounds(verse) {
@@ -316,6 +394,15 @@ impl VersesNavigator {
         let upper_bound = self.settings.bounds.upper_bound;
         let lower_bound = self.settings.bounds.lower_bound;
 
+        // Check if we're in excluding mode
+        if self.settings.bounds.is_excluding_mode() {
+            // In excluding mode: verse is out of bounds if it's within the excluded range
+            // (from lower_bound to upper_bound, exclusive)
+            let verse_pos = VersePosition::new(verse_sura, verse_number);
+            return verse_pos > lower_bound && verse_pos < upper_bound;
+        }
+
+        // Normal inclusive mode: verse is out of bounds if it's outside the range
         let is_out_of_bounds_sura: bool =
             verse_sura < upper_bound.sura() || verse_sura > lower_bound.sura();
         if is_out_of_bounds_sura {
@@ -323,6 +410,11 @@ impl VersesNavigator {
         }
 
         // Verse sura in the bounds
+
+        // If both bounds are in the same sura, check both conditions
+        if upper_bound.sura() == lower_bound.sura() && verse_sura == upper_bound.sura() {
+            return verse_number < upper_bound.verse() || verse_number > lower_bound.verse();
+        }
 
         if verse_sura == upper_bound.sura() {
             return verse_number < upper_bound.verse();
@@ -437,9 +529,11 @@ impl VersesNavigator {
         let pre_current_verse = *self.current_verse();
         let start_bound = self.get_start_bound();
         let end_bound = self.get_end_bound();
-        let remaining_iterations = self.settings.bounds.iteration_limit.saturating_sub(
-            self.iteration_count
-        );
+        let remaining_iterations = self
+            .settings
+            .bounds
+            .iteration_limit
+            .saturating_sub(self.iteration_count);
 
         // Before we move to the next verse, check if we have reached the lower bound
         if end_bound.eq(self.current_verse()) {
@@ -460,6 +554,25 @@ impl VersesNavigator {
         };
 
         if has_verse {
+            // In excluding mode, skip over excluded verses
+            if self.settings.bounds.is_excluding_mode() {
+                loop {
+                    let current = self.current_verse();
+                    let current_pos = VersePosition::new(current.sura, current.number);
+
+                    if !self.is_out_of_bounds(current_pos) {
+                        break;
+                    }
+
+                    let moved = match self.direction {
+                        Direction::Downwards => self.next_verse_downward().is_ok(),
+                        Direction::Upwards => self.next_verse_upward().is_ok(),
+                    };
+                    if !moved {
+                        return None;
+                    }
+                }
+            }
             return Some(self.current_verse());
         }
 
@@ -513,13 +626,20 @@ impl VersesNavigator {
             return Ok(());
         }
         match self.move_pre_sura(self.current_verse().sura) {
-            Ok(verse) => Ok(()),
-            Err(e) => Err(()),
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
         }
     }
 
     fn move_pre_sura(&mut self, current_sura: u8) -> Result<&Verse, LookupError> {
-        let pre_sura = self.quran_metadata.get_sura_info(current_sura - 1)?;
+        // When at sura 1 in upward navigation, wrap to sura 114
+        let target_sura = if current_sura == 1 {
+            114
+        } else {
+            current_sura - 1
+        };
+
+        let pre_sura = self.quran_metadata.get_sura_info(target_sura)?;
         let first_page_idx = (pre_sura.start_page - 1) as usize;
         let first_page = &self.mushaf.pages[first_page_idx];
         // find first verse index
@@ -544,7 +664,7 @@ impl VersesNavigator {
     /// * `expect` if `i` cannot be converted to a `u8`, where `i` is the index of the verse in the page.
     pub fn find_verse(
         &self,
-        verse: impl Into<VersePosition>
+        verse: impl Into<VersePosition>,
     ) -> Result<(&Verse, u16, u8), LookupError> {
         let (sura_number, verse_number) = verse.into().tuple();
         let sura = self.quran_metadata.get_sura_info(sura_number)?;
@@ -572,7 +692,7 @@ impl VersesNavigator {
     pub fn calculate_verse_lines(&self, verse: &Verse) -> f32 {
         let mut total_lines = verse.lines;
         if self.settings.ignore_sura_header {
-            return total_lines;
+            return (total_lines * 10.0).round() / 10.0;
         }
 
         // Add lines for sura headers if this is the first verse of a sura
@@ -585,7 +705,7 @@ impl VersesNavigator {
             }
         }
 
-        total_lines
+        (total_lines * 10.0).round() / 10.0
     }
 
     // Index navigation
@@ -595,9 +715,8 @@ impl VersesNavigator {
         }
 
         let mut page_verses = self.mushaf.pages[self.current_page_idx].verses();
-        let mut remaining =
-            index +
-            (if backward {
+        let mut remaining = index
+            + (if backward {
                 page_verses.len() - 1 - self.current_verse_idx
             } else {
                 self.current_verse_idx
@@ -630,8 +749,8 @@ impl VersesNavigator {
                 }
 
                 match backward {
-                    true => { self.current_page_idx - 1 }
-                    false => { self.current_page_idx + 1 }
+                    true => self.current_page_idx - 1,
+                    false => self.current_page_idx + 1,
                 }
             };
             page_verses = self.mushaf.pages[self.current_page_idx].verses();
@@ -650,14 +769,14 @@ impl VersesNavigator {
 
 #[cfg(test)]
 mod test {
-    use std::{ path::PathBuf, rc::Rc };
+    use std::{path::PathBuf, rc::Rc};
 
     use colored::Colorize;
 
     use crate::{
-        king_fahad_mushaf::{ JsonVerse, KingFahadMushaf },
-        mushaf::{ Mushaf, QuranMetadata, Verse },
-        navigation::{ Direction, NavigationSettings, VersePosition, VersesNavigator },
+        king_fahad_mushaf::{JsonVerse, KingFahadMushaf},
+        mushaf::{Mushaf, QuranMetadata, Verse},
+        navigation::{Direction, NavigationSettings, VersePosition, VersesNavigator},
     };
 
     fn get_mushaf() -> (Rc<Mushaf>, Rc<QuranMetadata>) {
@@ -666,15 +785,15 @@ mod test {
         data_path.push("king_fahad_mushaf.json");
 
         let mushaf = Rc::new({
-            let path = data_path.to_str().expect("expect `data_path` to be a valid string");
+            let path = data_path
+                .to_str()
+                .expect("expect `data_path` to be a valid string");
             // Load from provided JSON path
-            let file_content = std::fs
-                ::read_to_string(path)
-                .expect("Failed to read mushaf data file");
+            let file_content =
+                std::fs::read_to_string(path).expect("Failed to read mushaf data file");
 
-            let pages: Vec<Vec<JsonVerse>> = serde_json
-                ::from_str(&file_content)
-                .expect("Failed to parse mushaf JSON data");
+            let pages: Vec<Vec<JsonVerse>> =
+                serde_json::from_str(&file_content).expect("Failed to parse mushaf JSON data");
 
             KingFahadMushaf::create_mushaf_from_pages(pages)
         });
@@ -686,12 +805,9 @@ mod test {
     #[test]
     fn test_calculate_verse_with_headers_and_without_headers() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        ).ignore_sura_header(false);
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .ignore_sura_header(false);
         // Sura (9 - At-Tawbah) does not have a bismillah
         navigator.reset_position(VersePosition::new(9, 1));
         let verse = navigator.current_verse();
@@ -718,12 +834,8 @@ mod test {
     #[test]
     fn test_upwards_navigation() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
         assert!(navigator.reset_position(VersePosition::new(5, 119)).is_ok());
 
         let verse = navigator.next_verse();
@@ -743,12 +855,8 @@ mod test {
     #[test]
     fn test_downwards_navigation() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
         navigator.reset_position(VersePosition::new(5, 119));
 
         let verse = navigator.next_verse();
@@ -769,12 +877,8 @@ mod test {
     fn comprehensive_downwards() {
         let (mushaf, metadata) = get_mushaf();
         let pages = Rc::clone(&mushaf.pages);
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
         for page in pages.iter() {
             for verse in page.verses() {
@@ -792,13 +896,15 @@ mod test {
             mushaf,
             metadata.clone(),
             Default::default(),
-            Default::default()
+            Default::default(),
         );
 
         navigator.reset_position(VersePosition::new(114, 1));
         for i in 1..=114_u8 {
             let sura_number = 114 - i + 1;
-            let sura = metadata.get_sura_info(sura_number).expect("Invalid sura number");
+            let sura = metadata
+                .get_sura_info(sura_number)
+                .expect("Invalid sura number");
             for page_number in sura.start_page..=sura.end_page {
                 let page = &pages[(page_number - 1) as usize];
                 for verse in page.verses() {
@@ -816,12 +922,8 @@ mod test {
     fn per_sura() {
         let (mushaf, metadata) = get_mushaf();
         let pages = Rc::clone(&mushaf.pages);
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
         navigator.reset_position(VersePosition::end());
 
         let pre = navigator.move_pre_sura(navigator.current_verse().sura);
@@ -840,12 +942,8 @@ mod test {
     #[test]
     fn test_move_by_index_forward_same_page() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
         // Start at first verse of first page
         navigator.reset_position(VersePosition::new(1, 1));
@@ -873,7 +971,7 @@ mod test {
             mushaf.clone(),
             metadata,
             Default::default(),
-            Default::default()
+            Default::default(),
         );
         // Start at 4th verse of first page
         navigator.reset_position(VersePosition::new(1, 4));
@@ -900,7 +998,7 @@ mod test {
             mushaf.clone(),
             metadata.clone(),
             Default::default(),
-            Default::default()
+            Default::default(),
         );
 
         // Start at first verse of first page
@@ -921,7 +1019,7 @@ mod test {
             mushaf.clone(),
             metadata.clone(),
             Default::default(),
-            Default::default()
+            Default::default(),
         );
 
         // Start at a verse in the second page
@@ -939,34 +1037,32 @@ mod test {
     #[test]
     fn test_move_by_index_zero_index() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
         navigator.reset_position(VersePosition::new(1, 1));
 
         // Move by 0 index should return None
         let verse = navigator.forward_index(0).copied();
         assert!(verse.is_some());
-        assert_eq!(VersePosition::new(1, 1), verse.expect("expect `verse` not to be None"));
+        assert_eq!(
+            VersePosition::new(1, 1),
+            verse.expect("expect `verse` not to be None")
+        );
 
         let verse = navigator.backward_index(0).copied();
         assert!(verse.is_some());
-        assert_eq!(VersePosition::new(1, 1), verse.expect("expect `verse` not to be None"));
+        assert_eq!(
+            VersePosition::new(1, 1),
+            verse.expect("expect `verse` not to be None")
+        );
     }
 
     #[test]
     fn test_move_by_index_large_index() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
         navigator.reset_position(VersePosition::new(1, 1));
 
@@ -986,7 +1082,7 @@ mod test {
             mushaf.clone(),
             metadata.clone(),
             Default::default(),
-            Default::default()
+            Default::default(),
         );
 
         // Test at the last verse of a page
@@ -1021,7 +1117,7 @@ mod test {
             mushaf.clone(),
             metadata.clone(),
             Default::default(),
-            Default::default()
+            Default::default(),
         );
 
         navigator.reset_position(VersePosition::new(1, 1));
@@ -1054,7 +1150,7 @@ mod test {
             Rc::clone(&mushaf),
             Rc::clone(&metadata),
             Default::default(),
-            Direction::Upwards
+            Direction::Upwards,
         );
 
         navigator_up.reset_position(VersePosition::new(2, 5));
@@ -1062,12 +1158,8 @@ mod test {
         assert!(verse_up.is_some());
 
         // Test with Downwards direction
-        let mut navigator_down = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Direction::Downwards
-        );
+        let mut navigator_down =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
 
         navigator_down.reset_position(VersePosition::new(2, 5));
         let verse_down = navigator_down.forward_index(3);
@@ -1081,12 +1173,8 @@ mod test {
     #[test]
     fn test_move_by_index_invalid_page_index() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
         // Set an invalid page index (beyond available pages)
         navigator.current_page_idx = 1000;
@@ -1102,12 +1190,8 @@ mod test {
     #[test]
     fn test_reset_iterations() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
         navigator.reset_iterations(2);
         assert_eq!(navigator.iteration_count, 2);
@@ -1129,12 +1213,8 @@ mod test {
     #[test]
     fn test_bounds_remain_consistent_with_direction_changes() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Direction::Downwards
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
 
         let upper_bound = navigator.settings.bounds.upper_bound;
         let lower_bound = navigator.settings.bounds.lower_bound;
@@ -1148,12 +1228,8 @@ mod test {
     #[test]
     fn test_reset_position() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
         navigator.reset_position(VersePosition::new(2, 1));
         assert_eq!(navigator.current_verse().sura, 2);
         assert_eq!(navigator.current_verse().number, 1);
@@ -1170,42 +1246,46 @@ mod test {
     #[test]
     fn test_reset_position_invalid_verse() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        );
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
-        assert!(navigator.reset_position(VersePosition::new(2, 287)).is_err());
+        assert!(
+            navigator
+                .reset_position(VersePosition::new(2, 287))
+                .is_err()
+        );
         assert!(navigator.reset_position(VersePosition::new(2, 0)).is_err());
-        assert!(navigator.reset_position(VersePosition::new(114, 7)).is_err());
-        assert!(navigator.reset_position(VersePosition::new(114, 0)).is_err());
-        assert!(navigator.reset_position(VersePosition::new(112, 90)).is_err());
+        assert!(
+            navigator
+                .reset_position(VersePosition::new(114, 7))
+                .is_err()
+        );
+        assert!(
+            navigator
+                .reset_position(VersePosition::new(114, 0))
+                .is_err()
+        );
+        assert!(
+            navigator
+                .reset_position(VersePosition::new(112, 90))
+                .is_err()
+        );
     }
 
     #[test]
     fn test_multiple_iterations() {
         let (mushaf, metadata) = get_mushaf();
-        let mut navigator = VersesNavigator::new(
-            mushaf,
-            metadata,
-            Default::default(),
-            Default::default()
-        )
-            .upper_bound(VersePosition::new(2, 1))
-            .lower_bound(VersePosition::new(2, 286))
-            .iteration_limit(1);
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(2, 1))
+                .lower_bound(VersePosition::new(2, 286))
+                .iteration_limit(1);
         navigator.reset_position(VersePosition::new(2, 1));
 
         let sura_2_lines = {
             let (mushaf, metadata) = get_mushaf();
-            let mut nav = VersesNavigator::new(
-                mushaf,
-                metadata,
-                Default::default(),
-                Default::default()
-            );
+            let mut nav =
+                VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
             nav.reset_position(VersePosition::new(2, 1));
             let mut lines = 0.0;
             println!("===== Start of `sura_2_lines` =====");
@@ -1249,5 +1329,405 @@ mod test {
         println!("===== End of `lines_count` =====");
         assert_eq!(navigator.iteration_count + 1, 2);
         assert!((sura_2_lines * 2.0 - lines_count).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_excluding_mode_basic_downwards() {
+        let (mushaf, metadata) = get_mushaf();
+        // Exclude verses strictly between 2 and 4 of Sura 1 (exclusive)
+        // So we should navigate: (1,1), (1,2), skip (1,3), (1,4), (1,5), (1,6), (1,7)
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(1, 4)) // upper > lower = excluding mode
+                .lower_bound(VersePosition::new(1, 2))
+                .iteration_limit(0);
+
+        navigator
+            .reset_position(VersePosition::new(1, 1))
+            .expect("Should reset to (1,1)");
+
+        // First verse should be (1,1)
+        let verse = navigator.current_verse();
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 1);
+
+        // Next should be (1,2) - bound itself is NOT excluded
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 2);
+
+        // Next should skip to (1,4) - skipping (1,3) which is strictly between bounds
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 4);
+
+        // Continue to (1,5)
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 5);
+
+        // Continue to (1,6)
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 6);
+
+        // Continue to (1,7)
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 7);
+
+        // Should continue to next sura (2,1)
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 1);
+    }
+
+    #[test]
+    fn test_is_out_of_bounds_inclusive_mode() {
+        let (mushaf, metadata) = get_mushaf();
+        // Normal inclusive mode: upper_bound < lower_bound
+        // Navigate from (2, 1) to (2, 286) - all of Sura 2
+        let navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(2, 1))
+                .lower_bound(VersePosition::new(2, 286));
+
+        // Verses within the inclusive range should NOT be out of bounds
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 1)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 50)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 286)));
+
+        // Verses outside the inclusive range should be out of bounds
+        assert!(navigator.is_out_of_bounds(VersePosition::new(1, 7))); // Before upper_bound
+        assert!(navigator.is_out_of_bounds(VersePosition::new(3, 1))); // After lower_bound
+    }
+
+    #[test]
+    fn test_is_out_of_bounds_excluding_mode() {
+        let (mushaf, metadata) = get_mushaf();
+        // Excluding mode: upper_bound > lower_bound
+        // Navigate everywhere EXCEPT verses strictly between 2 and 4 of Sura 1 (exclusive)
+        let navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(1, 4))
+                .lower_bound(VersePosition::new(1, 2));
+
+        // Only verse 3 is in the excluded range (exclusive bounds)
+        assert!(navigator.is_out_of_bounds(VersePosition::new(1, 3)));
+
+        // Verses 2 and 4 are the bounds themselves, so NOT excluded
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 2)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 4)));
+
+        // Verses outside excluded range should NOT be out of bounds
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 1)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 5)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 6)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 7)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 1)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(114, 6)));
+    }
+
+    #[test]
+    fn test_is_out_of_bounds_excluding_mode_large_range() {
+        let (mushaf, metadata) = get_mushaf();
+        // Exclude a large range: verses strictly between 10 and 100 of Sura 2 (exclusive)
+        let navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(2, 100))
+                .lower_bound(VersePosition::new(2, 10));
+
+        // Verses strictly between 10 and 100 are excluded
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 11)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 50)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 99)));
+
+        // Verses 10 and 100 are the bounds themselves, so NOT excluded
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 10)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 100)));
+
+        // Verses outside excluded range should NOT be out of bounds
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 9)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 101)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 1)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(3, 1)));
+    }
+
+    #[test]
+    fn test_is_out_of_bounds_excluding_mode_cross_sura() {
+        let (mushaf, metadata) = get_mushaf();
+        // Exclude range across suras: strictly between (1, 5) and (2, 5) (exclusive)
+        let navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(2, 5))
+                .lower_bound(VersePosition::new(1, 5));
+
+        // Verses strictly between (1,5) and (2,5) are excluded
+        assert!(navigator.is_out_of_bounds(VersePosition::new(1, 6)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(1, 7)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 1)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 2)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 3)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 4)));
+
+        // The bounds themselves (1,5) and (2,5) are NOT excluded
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 5)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 5)));
+
+        // Verses outside excluded range should NOT be out of bounds
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(1, 4)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 6)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(3, 1)));
+    }
+
+    #[test]
+    fn test_is_out_of_bounds_invalid_verse() {
+        let (mushaf, metadata) = get_mushaf();
+        let navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
+
+        // Invalid verses should be out of bounds
+        assert!(navigator.is_out_of_bounds(VersePosition::new(0, 1)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(115, 1)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(1, 0)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(1, 100))); // Al-Fatiha only has 7 verses
+    }
+
+    #[test]
+    fn test_excluding_mode_reset_position() {
+        let (mushaf, metadata) = get_mushaf();
+        // Exclude verses strictly between 2 and 4 of Sura 1 (exclusive)
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(1, 4))
+                .lower_bound(VersePosition::new(1, 2));
+
+        // Should be able to reset to verses outside excluded range
+        assert!(navigator.reset_position(VersePosition::new(1, 1)).is_ok());
+        assert!(navigator.reset_position(VersePosition::new(1, 5)).is_ok());
+        assert!(navigator.reset_position(VersePosition::new(2, 1)).is_ok());
+
+        // Bounds themselves (2 and 4) are NOT excluded, so they should work
+        assert!(navigator.reset_position(VersePosition::new(1, 2)).is_ok());
+        assert!(navigator.reset_position(VersePosition::new(1, 4)).is_ok());
+
+        // Should NOT be able to reset to verse 3 (strictly between bounds)
+        assert!(navigator.reset_position(VersePosition::new(1, 3)).is_err());
+    }
+
+    #[test]
+    fn test_excluding_mode_cross_sura() {
+        let (mushaf, metadata) = get_mushaf();
+        // Exclude verses strictly between 1 and 5 of Sura 2 (exclusive)
+        // This tests skipping across sura boundaries
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(2, 5))
+                .lower_bound(VersePosition::new(2, 1))
+                .iteration_limit(0);
+
+        // Start at end of Sura 1
+        navigator
+            .reset_position(VersePosition::new(1, 7))
+            .expect("Should reset to (1,7)");
+
+        // Next should be (2,1) - the lower bound itself is NOT excluded
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 1);
+
+        // Next should skip to (2,5) - skipping (2,2), (2,3), (2,4)
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 5);
+
+        // Next should be (2,6)
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 6);
+    }
+
+    #[test]
+    fn test_excluding_mode_get_bounds() {
+        let (mushaf, metadata) = get_mushaf();
+        // Excluding mode: exclude verses strictly between (2,286) and (78,1)
+        let mut navigator = VersesNavigator::new(
+            Rc::clone(&mushaf),
+            Rc::clone(&metadata),
+            Default::default(),
+            Direction::Upwards,
+        )
+        .upper_bound(VersePosition::new(78, 1)) // An-Naba' starts at verse 1
+        .lower_bound(VersePosition::new(2, 286)); // Al-Baqarah ends at verse 286
+
+        // In excluding mode with upwards direction:
+        // start_bound = start of sura containing lower_bound = (2, 1)
+        let start_bound = navigator.get_start_bound();
+        assert_eq!(start_bound, VersePosition::new(2, 1));
+        navigator
+            .reset_position(start_bound)
+            .expect("Should reset to (2,1)");
+
+        loop {
+            let verse = navigator.next_verse();
+            if verse.is_none() {
+                break;
+            }
+            let verse = verse.expect("expect `verse` not to be None");
+            println!("{verse}");
+        }
+
+        // end_bound = end of sura containing upper_bound
+        let end_bound = navigator.get_end_bound();
+        let sura_78_info = metadata.get_sura_info(78).expect("Sura 78 should exist");
+        assert_eq!(end_bound, VersePosition::new(78, sura_78_info.total_verses));
+    }
+
+    #[test]
+    fn test_excluding_mode_large_range() {
+        let (mushaf, metadata) = get_mushaf();
+        // Exclude verses strictly between 10 and 100 of Sura 2 (exclusive)
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
+                .upper_bound(VersePosition::new(2, 100))
+                .lower_bound(VersePosition::new(2, 10))
+                .iteration_limit(0);
+
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 10)));
+
+        navigator
+            .reset_position(VersePosition::new(2, 10))
+            .expect("Should reset to (2,10)");
+
+        // Next should skip to (2,100) - skipping (2,11)-(2,99)
+        let verse = navigator.next_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect `verse` not to be None");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 100); // Bound itself is NOT excluded
+
+        // Verify excluded verses are out of bounds
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 11))); // Strictly between bounds
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 50)));
+        assert!(navigator.is_out_of_bounds(VersePosition::new(2, 99)));
+
+        // Bounds themselves and outside are NOT excluded
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 9)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 10)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 100)));
+        assert!(!navigator.is_out_of_bounds(VersePosition::new(2, 101)));
+    }
+
+    #[test]
+    fn test_get_start_and_end_bounds() {
+        let (mushaf, metadata) = get_mushaf();
+
+        // Test 1: Downwards direction - start_bound should be upper_bound
+        let navigator = VersesNavigator::new(
+            Rc::clone(&mushaf),
+            Rc::clone(&metadata),
+            Default::default(),
+            Direction::Downwards,
+        )
+        .upper_bound(VersePosition::new(2, 1))
+        .lower_bound(VersePosition::new(2, 286));
+
+        assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 1));
+        assert_eq!(navigator.get_end_bound(), VersePosition::new(2, 286));
+
+        // Test 2: Upwards direction with full sura in bounds
+        let navigator = VersesNavigator::new(
+            Rc::clone(&mushaf),
+            Rc::clone(&metadata),
+            Default::default(),
+            Direction::Upwards,
+        )
+        .upper_bound(VersePosition::new(2, 1))
+        .lower_bound(VersePosition::new(2, 286));
+
+        // Should be start of sura 2
+        assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 1));
+        // Should be end of sura 2
+        assert_eq!(navigator.get_end_bound(), VersePosition::new(2, 286));
+
+        // Test 3: Upwards with start of sura out of bounds
+        let navigator = VersesNavigator::new(
+            Rc::clone(&mushaf),
+            Rc::clone(&metadata),
+            Default::default(),
+            Direction::Upwards,
+        )
+        .upper_bound(VersePosition::new(2, 10))
+        .lower_bound(VersePosition::new(2, 50));
+
+        // Start of sura 2 (verse 1) is out of bounds (< 10), should return upper_bound
+        assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 10));
+        // End of sura 2 (verse 286) is out of bounds (> 50), should return lower_bound
+        assert_eq!(navigator.get_end_bound(), VersePosition::new(2, 50));
+
+        // Test 4: Upwards with bounds spanning multiple suras
+        let navigator = VersesNavigator::new(
+            Rc::clone(&mushaf),
+            Rc::clone(&metadata),
+            Default::default(),
+            Direction::Upwards,
+        )
+        .upper_bound(VersePosition::new(1, 1))
+        .lower_bound(VersePosition::new(3, 100));
+
+        // Should be start of sura 3
+        assert_eq!(navigator.get_start_bound(), VersePosition::new(3, 1));
+        // Should be end of sura 1 (verse 7)
+        assert_eq!(navigator.get_end_bound(), VersePosition::new(1, 7));
+
+        // Test 5: Bounds consistency when switching directions
+        let mut navigator = VersesNavigator::new(
+            Rc::clone(&mushaf),
+            Rc::clone(&metadata),
+            Default::default(),
+            Direction::Downwards,
+        )
+        .upper_bound(VersePosition::new(5, 1))
+        .lower_bound(VersePosition::new(5, 120));
+
+        // Downwards: start=upper, end=lower
+        assert_eq!(navigator.get_start_bound(), VersePosition::new(5, 1));
+        assert_eq!(navigator.get_end_bound(), VersePosition::new(5, 120));
+
+        // Switch to upwards
+        navigator = navigator.direction(Direction::Upwards);
+
+        // Upwards: start=start of sura, end=end of sura
+        assert_eq!(navigator.get_start_bound(), VersePosition::new(5, 1));
+        assert_eq!(navigator.get_end_bound(), VersePosition::new(5, 120));
+
+        // Test 6: Partial sura coverage with upwards direction
+        let navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Upwards)
+                .upper_bound(VersePosition::new(2, 50))
+                .lower_bound(VersePosition::new(2, 100));
+
+        // Start of sura 2 (verse 1) is out of bounds (< 50), should return upper_bound
+        assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 50));
+        // End of sura 2 (verse 286) is out of bounds (> 100), should return lower_bound
+        assert_eq!(navigator.get_end_bound(), VersePosition::new(2, 100));
     }
 }

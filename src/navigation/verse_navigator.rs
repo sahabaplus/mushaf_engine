@@ -529,11 +529,8 @@ impl VersesNavigator {
         let pre_current_verse = *self.current_verse();
         let start_bound = self.get_start_bound();
         let end_bound = self.get_end_bound();
-        let remaining_iterations = self
-            .settings
-            .bounds
-            .iteration_limit
-            .saturating_sub(self.iteration_count);
+        let remaining_iterations =
+            self.settings.bounds.iteration_limit.saturating_sub(self.iteration_count);
 
         // Before we move to the next verse, check if we have reached the lower bound
         if end_bound.eq(self.current_verse()) {
@@ -785,9 +782,7 @@ mod test {
         data_path.push("king_fahad_mushaf.json");
 
         let mushaf = Rc::new({
-            let path = data_path
-                .to_str()
-                .expect("expect `data_path` to be a valid string");
+            let path = data_path.to_str().expect("expect `data_path` to be a valid string");
             // Load from provided JSON path
             let file_content =
                 std::fs::read_to_string(path).expect("Failed to read mushaf data file");
@@ -902,9 +897,7 @@ mod test {
         navigator.reset_position(VersePosition::new(114, 1));
         for i in 1..=114_u8 {
             let sura_number = 114 - i + 1;
-            let sura = metadata
-                .get_sura_info(sura_number)
-                .expect("Invalid sura number");
+            let sura = metadata.get_sura_info(sura_number).expect("Invalid sura number");
             for page_number in sura.start_page..=sura.end_page {
                 let page = &pages[(page_number - 1) as usize];
                 for verse in page.verses() {
@@ -1131,9 +1124,8 @@ mod test {
         navigator.reset_position(VersePosition::new(1, 1));
         let mut verse_by_sequential = navigator.current_verse();
         for _ in 0..3 {
-            verse_by_sequential = navigator
-                .next_verse()
-                .expect("expect `verse_by_sequential` not to be None");
+            verse_by_sequential =
+                navigator.next_verse().expect("expect `verse_by_sequential` not to be None");
         }
 
         // Results should be the same
@@ -1249,27 +1241,11 @@ mod test {
         let mut navigator =
             VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
-        assert!(
-            navigator
-                .reset_position(VersePosition::new(2, 287))
-                .is_err()
-        );
+        assert!(navigator.reset_position(VersePosition::new(2, 287)).is_err());
         assert!(navigator.reset_position(VersePosition::new(2, 0)).is_err());
-        assert!(
-            navigator
-                .reset_position(VersePosition::new(114, 7))
-                .is_err()
-        );
-        assert!(
-            navigator
-                .reset_position(VersePosition::new(114, 0))
-                .is_err()
-        );
-        assert!(
-            navigator
-                .reset_position(VersePosition::new(112, 90))
-                .is_err()
-        );
+        assert!(navigator.reset_position(VersePosition::new(114, 7)).is_err());
+        assert!(navigator.reset_position(VersePosition::new(114, 0)).is_err());
+        assert!(navigator.reset_position(VersePosition::new(112, 90)).is_err());
     }
 
     #[test]
@@ -1582,9 +1558,7 @@ mod test {
         // start_bound = start of sura containing lower_bound = (2, 1)
         let start_bound = navigator.get_start_bound();
         assert_eq!(start_bound, VersePosition::new(2, 1));
-        navigator
-            .reset_position(start_bound)
-            .expect("Should reset to (2,1)");
+        navigator.reset_position(start_bound).expect("Should reset to (2,1)");
 
         loop {
             let verse = navigator.next_verse();

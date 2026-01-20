@@ -131,9 +131,7 @@ mod test {
         data_path.push("king_fahad_mushaf.json");
 
         let mushaf = Rc::new({
-            let path = data_path
-                .to_str()
-                .expect("expect `data_path` to be a valid string");
+            let path = data_path.to_str().expect("expect `data_path` to be a valid string");
             // Load from provided JSON path
             let file_content =
                 std::fs::read_to_string(path).expect("Failed to read mushaf data file");

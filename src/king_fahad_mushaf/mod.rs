@@ -99,9 +99,7 @@ mod test {
         data_path.push("king_fahad_mushaf.json");
 
         let mushaf = KingFahadMushaf::from_file(
-            data_path
-                .to_str()
-                .expect("expect `data_path` to be a valid string"),
+            data_path.to_str().expect("expect `data_path` to be a valid string"),
         );
         let mushaf = mushaf.expect("expect `mushaf` not to be `Err`");
 

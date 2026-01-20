@@ -142,8 +142,7 @@ impl QuranMetadata {
 
         let sum = (start_sura..=end_sura)
             .map(|sura_num| {
-                self.get_sura_info(sura_num)
-                    .expect("expect `get_sura_info` to succeed")
+                self.get_sura_info(sura_num).expect("expect `get_sura_info` to succeed")
             })
             .map(|info| info.lines_with_header)
             .sum();
@@ -178,9 +177,7 @@ mod tests {
         data_path.push("king_fahad_mushaf.json");
 
         let mushaf = {
-            let path = data_path
-                .to_str()
-                .expect("expect `data_path` to be a valid string");
+            let path = data_path.to_str().expect("expect `data_path` to be a valid string");
             // Load from provided JSON path
             let file_content =
                 std::fs::read_to_string(path).expect("Failed to read mushaf data file");
@@ -201,17 +198,13 @@ mod tests {
         assert_eq!(metadata.total_suras(), 114);
 
         // Test Al-Fatiha info
-        let fatiha = metadata
-            .get_sura_info(1)
-            .expect("expect `fatiha` not to be Err");
+        let fatiha = metadata.get_sura_info(1).expect("expect `fatiha` not to be Err");
         assert_eq!(fatiha.number, 1);
         assert_eq!(fatiha.total_verses, 7); // Al-Fatiha has 7 verses
         assert!(fatiha.lines_with_header > fatiha.lines); // Should include header
 
         // Test At-Tawbah (no bismillah)
-        let tawbah = metadata
-            .get_sura_info(9)
-            .expect("expect `tawbah` not to be Err");
+        let tawbah = metadata.get_sura_info(9).expect("expect `tawbah` not to be Err");
         assert_eq!(tawbah.number, 9);
         assert!((tawbah.lines_with_header - (tawbah.lines + 1.0)).abs() < f32::EPSILON); // Only 1 line for header
 
@@ -244,9 +237,8 @@ mod tests {
         let metadata = setup_metadata();
 
         // Test line counting for a range of suras
-        let lines_1_to_3 = metadata
-            .get_lines_range(1, 3)
-            .expect("expect `lines_1_to_3` not to be Err");
+        let lines_1_to_3 =
+            metadata.get_lines_range(1, 3).expect("expect `lines_1_to_3` not to be Err");
         assert!(lines_1_to_3 > 0.0, "Lines for suras 1-3 should be positive");
 
         // Test with invalid range

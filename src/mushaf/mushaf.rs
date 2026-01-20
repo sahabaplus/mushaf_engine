@@ -75,12 +75,7 @@ impl Display for Mushaf {
                 f,
                 "{}: {}",
                 "Total Verses".yellow(),
-                self.pages
-                    .iter()
-                    .map(|p| p.verses().len())
-                    .sum::<usize>()
-                    .to_string()
-                    .cyan()
+                self.pages.iter().map(|p| p.verses().len()).sum::<usize>().to_string().cyan()
             )
         }
 

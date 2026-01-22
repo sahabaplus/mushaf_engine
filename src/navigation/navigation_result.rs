@@ -4,6 +4,146 @@ use crate::mushaf::Verse;
 #[cfg(feature = "colored_output")]
 use colored::Colorize;
 
+/// Information about navigation cycles and boundary crossings
+///
+/// This structure groups semantically related cycle information to improve
+/// code organization and reduce function parameter count.
+///
+/// Note: `Eq` is not derived because `cycle_distance` is an `f32`, which does not implement `Eq`
+/// due to NaN handling. Use `PartialEq` for equality comparisons.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CycleInfo {
+    /// Number of times navigation passed through the starting verse again
+    ///
+    /// This counts how many times the navigator returned to the initial starting verse
+    /// during navigation. For example, if navigating from (10,1) by 10000 lines ends at
+    /// (10,100), a `cycles_completed` of 2 means we passed through (10,1) twice during
+    /// navigation, explaining why the large distance resulted in a nearby verse.
+    ///
+    /// This is essential for `calculate_lines` to accurately compute the distance when
+    /// given a start verse, end verse, and cycle count.
+    cycles_completed: u32,
+    /// Whether the navigation crossed boundaries (passed starting point or wrapped mushaf)
+    ///
+    /// This is true when:
+    /// - Navigation passed through the starting verse at least once (`cycles_completed > 0`)
+    /// - Mushaf wrapping occurred (sura 1 → 114 upward, or 114 → 1 downward)
+    ///
+    /// This helps callers understand non-linear navigation paths where the end position
+    /// may appear confusing relative to the start position.
+    crossed_boundaries: bool,
+    /// The distance (in lines) of one full cycle through the bounded region
+    ///
+    /// This is the number of lines required to navigate from the starting verse back to itself
+    /// when bounded navigation is enabled. For example, if navigating (2,1) → (2,50) → (2,1)
+    /// in a bounded region takes 150 lines, `cycle_distance` would be 150.0.
+    ///
+    /// This field is 0.0 when:
+    /// - No cycles were completed (`cycles_completed == 0`)
+    /// - No bounds are configured (unbounded navigation)
+    ///
+    /// This enables callers to compute total distance using the formula:
+    /// ```text
+    /// total_distance = (cycles_completed - 1) * cycle_distance + direct_distance
+    /// ```
+    ///
+    /// where `direct_distance` can be calculated using `calculate_lines(start, end, direction, settings)`.
+    ///
+    /// This formula works because:
+    /// - `cycles_completed` counts passes through the start verse
+    /// - Each pass adds one `cycle_distance` worth of lines
+    /// - The current (partial or complete) cycle contributes `direct_distance`
+    /// - So we have (N-1) complete previous cycles + current cycle
+    cycle_distance: f32,
+}
+
+impl Default for CycleInfo {
+    fn default() -> Self {
+        Self {
+            cycles_completed: 0,
+            crossed_boundaries: false,
+            cycle_distance: 0.0,
+        }
+    }
+}
+
+impl CycleInfo {
+    /// Create a new `CycleInfo` with the specified cycle tracking data
+    ///
+    /// # Arguments
+    /// * `cycles_completed` - Number of cycles through the starting verse
+    /// * `crossed_boundaries` - Whether navigation wrapped around boundaries
+    /// * `cycle_distance` - Distance in lines for one full cycle
+    #[must_use]
+    pub const fn new(cycles_completed: u32, crossed_boundaries: bool, cycle_distance: f32) -> Self {
+        Self {
+            cycles_completed,
+            crossed_boundaries,
+            cycle_distance,
+        }
+    }
+
+    /// Create a new `CycleInfo` with no cycles
+    ///
+    /// Use this for const contexts. For regular code, prefer `CycleInfo::default()`.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            cycles_completed: 0,
+            crossed_boundaries: false,
+            cycle_distance: 0.0,
+        }
+    }
+
+    /// Get the number of cycles completed
+    #[must_use]
+    pub const fn cycles_completed(&self) -> u32 {
+        self.cycles_completed
+    }
+
+    /// Get whether boundaries were crossed
+    #[must_use]
+    pub const fn crossed_boundaries(&self) -> bool {
+        self.crossed_boundaries
+    }
+
+    /// Get the cycle distance
+    #[must_use]
+    pub const fn cycle_distance(&self) -> f32 {
+        self.cycle_distance
+    }
+
+    /// Reconstruct total navigated distance from direct distance
+    ///
+    /// This helper method implements the formula:
+    /// ```text
+    /// total_distance = (cycles_completed - 1) * cycle_distance + direct_distance
+    /// ```
+    ///
+    /// # Arguments
+    /// * `direct_distance` - The direct distance between start and end verses
+    ///
+    /// # Returns
+    /// The total distance including all complete cycles
+    ///
+    /// # Example
+    /// ```
+    /// # use rust_quran_engine::navigation::CycleInfo;
+    /// let cycle_info = CycleInfo::new(3, true, 100.0);
+    /// let direct_distance = 25.0;
+    /// let total = cycle_info.reconstruct_distance(direct_distance);
+    /// assert_eq!(total, 225.0); // (3-1)*100 + 25
+    /// ```
+    #[must_use]
+    pub const fn reconstruct_distance(&self, direct_distance: f32) -> f32 {
+        if self.cycles_completed > 0 {
+            ((self.cycles_completed - 1) as f32) * self.cycle_distance + direct_distance
+        } else {
+            direct_distance
+        }
+    }
+}
+
 /// Comprehensive result of a navigation operation in the Quran
 ///
 /// This structure contains the primary verse reached through navigation,
@@ -23,6 +163,8 @@ pub struct NavigationResult {
     pub distance_moved: f32,
     /// The remaining distance that could not be navigated due to boundaries
     pub remaining_distance: f32,
+    /// Information about navigation cycles and boundary crossings
+    pub cycle_info: CycleInfo,
 }
 
 impl NavigationResult {
@@ -34,6 +176,7 @@ impl NavigationResult {
     /// * `last_of_page` - Optional information about the last verse of the page if encountered
     /// * `last_of_sura` - Optional information about the last verse of the sura if encountered
     /// * `distance_moved` - The actual distance moved during navigation in lines
+    /// * `cycle_info` - Information about navigation cycles and boundary crossings
     ///
     /// # Returns
     /// A new `NavigationResult` instance with all specified information
@@ -44,10 +187,10 @@ impl NavigationResult {
         end_of_page: Option<LastVerseResult>,
         end_of_sura: Option<LastVerseResult>,
         distance_moved: f32,
+        cycle_info: CycleInfo,
     ) -> Self {
-        let remaining_distance = overflow
-            .as_ref()
-            .map_or(0.0, |v| v.overflowed_verse.lines - v.overflow_lines);
+        let remaining_distance =
+            overflow.as_ref().map_or(0.0, |v| v.overflowed_verse.lines - v.overflow_lines);
         Self {
             verse,
             remaining_distance: (remaining_distance * 100.0).round() / 100.0,
@@ -55,6 +198,7 @@ impl NavigationResult {
             end_of_page,
             end_of_sura,
             distance_moved,
+            cycle_info,
         }
     }
 
@@ -75,6 +219,7 @@ impl NavigationResult {
             end_of_sura: None,
             distance_moved,
             remaining_distance: 0.0,
+            cycle_info: CycleInfo::none(),
         }
     }
 
@@ -97,6 +242,7 @@ impl NavigationResult {
             end_of_page: None,
             end_of_sura: None,
             distance_moved,
+            cycle_info: CycleInfo::default(),
         }
     }
 
@@ -152,6 +298,7 @@ impl NavigationResult {
             end_of_sura: None,
             distance_moved,
             remaining_distance: 0.0,
+            cycle_info: CycleInfo::none(),
         }
     }
 
@@ -177,6 +324,7 @@ impl NavigationResult {
             end_of_sura: Some(last_of_sura),
             distance_moved,
             remaining_distance: 0.0,
+            cycle_info: CycleInfo::none(),
         }
     }
 }
@@ -216,6 +364,36 @@ impl std::fmt::Display for NavigationResult {
                 writeln!(f, "{:16} {}", "End of sura:".magenta().bold(), end_sura)?;
             }
 
+            // Add cycles information if any cycles were completed
+            if self.cycle_info.cycles_completed() > 0 {
+                writeln!(
+                    f,
+                    "{:16} {}",
+                    "Cycles:".green().bold(),
+                    self.cycle_info.cycles_completed().to_string().yellow().bold()
+                )?;
+            }
+
+            // Add cycle distance if any cycles were tracked
+            if self.cycle_info.cycle_distance() > 0.0 {
+                writeln!(
+                    f,
+                    "{:16} {}",
+                    "Cycle Distance:".green().bold(),
+                    self.cycle_info.cycle_distance().to_string().yellow().bold()
+                )?;
+            }
+
+            // Add boundary crossing information if applicable
+            if self.cycle_info.crossed_boundaries() {
+                writeln!(
+                    f,
+                    "{:16} {}",
+                    "Crossed Bounds:".red().bold(),
+                    "Yes (wrapped around)".yellow().bold()
+                )?;
+            }
+
             Ok(())
         }
 
@@ -237,6 +415,25 @@ impl std::fmt::Display for NavigationResult {
             // Add end of sura information if present
             if let Some(end_sura) = &self.end_of_sura {
                 writeln!(f, "Last of sura: {}", end_sura)?;
+            }
+
+            // Add cycles information if any cycles were completed
+            if self.cycle_info.cycles_completed() > 0 {
+                writeln!(
+                    f,
+                    "Cycles completed: {}",
+                    self.cycle_info.cycles_completed()
+                )?;
+            }
+
+            // Add cycle distance if any cycles were tracked
+            if self.cycle_info.cycle_distance() > 0.0 {
+                writeln!(f, "Cycle distance: {}", self.cycle_info.cycle_distance())?;
+            }
+
+            // Add boundary crossing information if applicable
+            if self.cycle_info.crossed_boundaries() {
+                writeln!(f, "Crossed boundaries: Yes (wrapped around)")?;
             }
 
             Ok(())

@@ -57,7 +57,17 @@ pub trait IMushafEngine {
     /// * `LookupError::SuraNotFound` if the sura number is not found
     fn get_sura_info(&self, sura_number: u8) -> Result<&SuraInfo, LookupError>;
 
-    /// Calculate the lines between start and end verses
+    /// Calculate the direct distance in lines between start and end verses
+    ///
+    /// This calculates the simple A→B distance without accounting for cycles.
+    /// When bounded navigation produces cycles, callers can use the `cycle_distance`
+    /// field from `NavigationResult` to compute total distance:
+    ///
+    /// ```text
+    /// total_distance ≈ (cycles_completed - 1) * cycle_distance + direct_distance
+    /// ```
+    ///
+    /// where `direct_distance` is obtained from this method.
     ///
     /// # Arguments
     /// * `start` - Start verse position `VersePosition`
@@ -66,10 +76,10 @@ pub trait IMushafEngine {
     /// * `settings` - Navigation settings
     ///
     /// # Returns
-    /// Number of lines between the two verses
+    /// Direct distance in lines between the two verses
     ///
     /// # Errors
-    /// * `CalculatingLinesError::WrongBoundary` if the start and end verses are not in the same sura
+    /// * `CalculatingLinesError::WrongBoundary` if the verses are unreachable
     fn calculate_lines(
         &self,
         start: impl Into<VersePosition>,

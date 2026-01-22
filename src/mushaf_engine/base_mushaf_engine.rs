@@ -158,16 +158,63 @@ impl IMushafEngine for BaseMushafEngine {
         let mut last_of_page: Option<LastVerseResult> = None;
         let mut last_of_sura: Option<LastVerseResult> = None;
 
+        // Track cycles (passes through initial verse) and boundary crossings
+        let initial_verse = *navigator.current_verse();
+        let mut cycles_completed = 0u32;
+        let mut crossed_boundaries = false;
+        let mut has_moved = false;
+
+        // Track cycle distance (lines accumulated in the current cycle)
+        let mut lines_in_current_cycle = 0.0;
+        let mut cycle_distance = 0.0; // Set when first cycle completes
+
         loop {
             let current_verse = navigator.current_verse();
             // We looped twice and stuck at the same verse
             if &previous_verse == current_verse && (lines - remaining_lines).abs() > f32::EPSILON {
                 break;
             }
-            let current_sura_info = self.quran_metadata
+
+            // Check for boundary crossing via boundaries
+            // Detect when we hit either the upper or lower bound of the configured range.
+            // This helps track boundary crossings in both inclusive and excluding modes.
+            if has_moved {
+                match direction {
+                    Direction::Upwards => {
+                        if settings.bounds.upper_bound() == *current_verse {
+                            crossed_boundaries = true;
+                        }
+                    }
+                    Direction::Downwards => {
+                        if settings.bounds.lower_bound() == *current_verse {
+                            crossed_boundaries = true;
+                        }
+                    }
+                }
+            }
+
+            // Track cycles: count passes through the initial verse (after at least one move)
+            // Note: When a cycle is detected, we continue the loop and count this verse's lines
+            // This ensures consistency with calculate_lines cycle distance calculation
+            if has_moved && current_verse == &initial_verse {
+                cycles_completed += 1;
+                if cycle_distance == 0.0 {
+                    // Capture cycle distance on first cycle completion
+                    cycle_distance = lines_in_current_cycle;
+                }
+                lines_in_current_cycle = 0.0; // Reset for next cycle
+                crossed_boundaries = true;
+            }
+
+            let current_sura_info = self
+                .quran_metadata
                 .get_sura_info(current_verse.sura)
                 .expect("Current verse sura should exist");
             let verse_lines = navigator.calculate_verse_lines(current_verse);
+
+            // Accumulate lines for cycle distance tracking
+            lines_in_current_cycle += verse_lines;
+
             let diff = ((remaining_lines - verse_lines) * 100.0).round() / 100.0;
 
             if current_verse.is_last_of_page() {
@@ -188,6 +235,7 @@ impl IMushafEngine for BaseMushafEngine {
 
             if remaining_lines > f32::EPSILON {
                 navigator.next_verse();
+                has_moved = true;
             } else {
                 break;
             }
@@ -196,15 +244,14 @@ impl IMushafEngine for BaseMushafEngine {
         let last_of_sura = self.prefer_last_of_sura(last_of_sura, &previous_verse, direction);
         let last_of_page = self.prefer_last_of_page(last_of_page, &previous_verse, direction);
 
-        Ok(
-            NavigationResult::new(
-                previous_verse,
-                overflow,
-                last_of_page,
-                Some(last_of_sura),
-                lines - remaining_lines
-            )
-        )
+        Ok(NavigationResult::new(
+            previous_verse,
+            overflow,
+            last_of_page,
+            Some(last_of_sura),
+            lines - remaining_lines,
+            CycleInfo::new(cycles_completed, crossed_boundaries, cycle_distance),
+        ))
     }
 
     fn get_sura_info(&self, sura_number: u8) -> Result<&SuraInfo, LookupError> {
@@ -234,13 +281,14 @@ impl IMushafEngine for BaseMushafEngine {
             .find_verse(end)
             .map_err(|_| CalculatingLinesError::WrongBoundary)?;
 
+        // Calculate direct distance from start to end
         let mut navigator = self.create_navigator(settings, direction);
         navigator.reset_position(start);
 
-        let mut lines = 0.0;
+        let mut direct_lines = 0.0;
         loop {
             let verse_lines = navigator.calculate_verse_lines(navigator.current_verse());
-            lines += verse_lines;
+            direct_lines += verse_lines;
             if navigator.current_verse() == end_verse_data {
                 break;
             }
@@ -252,8 +300,7 @@ impl IMushafEngine for BaseMushafEngine {
             }
         }
 
-        // Round lines to 2 decimal places
-        lines = (lines * 100.0).round() / 100.0;
+        let lines = (direct_lines * 100.0).round() / 100.0;
         Ok(lines)
     }
 
@@ -280,6 +327,16 @@ mod tests {
     };
     use colored::Colorize;
     use std::{path::PathBuf, rc::Rc};
+
+    // Test tolerance constants
+    /// Tolerance for line distance comparisons in tests
+    const LINE_TOLERANCE: f32 = 0.1;
+
+    /// Tolerance for verse number comparisons in tests (for cycle verification)
+    const VERSE_TOLERANCE_SMALL: i32 = 2;
+
+    /// Tolerance for verse number comparisons in tests (for excluding bounds)
+    const VERSE_TOLERANCE_LARGE: i32 = 3;
 
     fn setup_engine() -> BaseMushafEngine {
         let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -323,8 +380,8 @@ mod tests {
             end_of_page,
             end_of_sura,
             overflow,
-            remaining_distance: _,
             verse,
+            ..
         } = result;
 
         assert!((distance_moved - 15.0).abs() < f32::EPSILON);
@@ -577,7 +634,7 @@ mod tests {
 
         let expected_lines = lines_1_to_10 + lines_20_to_30;
         assert!(
-            (lines_with_excluding - expected_lines).abs() < 0.1,
+            (lines_with_excluding - expected_lines).abs() < LINE_TOLERANCE,
             "Downwards: Expected {} lines (verses 1-10 + 20-30), got {} lines",
             expected_lines,
             lines_with_excluding
@@ -619,7 +676,7 @@ mod tests {
 
         let expected_lines_2 = lines_1_to_50 + lines_100_to_150;
         assert!(
-            (lines_with_excluding_2 - expected_lines_2).abs() < 0.1,
+            (lines_with_excluding_2 - expected_lines_2).abs() < LINE_TOLERANCE,
             "Downwards 2: Expected {} lines (verses 1-50 + 100-150), got {} lines",
             expected_lines_2,
             lines_with_excluding_2
@@ -663,7 +720,7 @@ mod tests {
 
         let expected_cross_sura_down = sura1_included + sura2_included;
         assert!(
-            (lines_cross_sura_down - expected_cross_sura_down).abs() < 0.1,
+            (lines_cross_sura_down - expected_cross_sura_down).abs() < LINE_TOLERANCE,
             "Cross-sura Downwards: Expected {} lines ((1,1-5) + (2,5-10)), got {} lines",
             expected_cross_sura_down,
             lines_cross_sura_down
@@ -705,7 +762,7 @@ mod tests {
 
         let expected_cross_sura_2 = sura2_part + sura3_part;
         assert!(
-            (lines_cross_sura_2 - expected_cross_sura_2).abs() < 0.1,
+            (lines_cross_sura_2 - expected_cross_sura_2).abs() < LINE_TOLERANCE,
             "Cross-sura 2: Expected {} lines ((2,50-100) + (3,50-100)), got {} lines",
             expected_cross_sura_2,
             lines_cross_sura_2
@@ -735,10 +792,317 @@ mod tests {
         // With excluding, we should have: full_range - excluded_range
         let expected_with_excluding = full_range_down - excluded_range_down;
         assert!(
-            (lines_cross_sura_down - expected_with_excluding).abs() < 0.1,
+            (lines_cross_sura_down - expected_with_excluding).abs() < LINE_TOLERANCE,
             "Verification: Expected {} lines (full - excluded), got {} lines",
             expected_with_excluding,
             lines_cross_sura_down
         );
+    }
+
+    #[test]
+    fn test_navigation_with_boundary_crossing() {
+        let engine = setup_engine();
+
+        // Navigate with excluding bounds in upward direction
+        // This will cause wrapping from sura 1 to sura 114
+        let excluding_settings = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(78, 1))
+            .lower_bound(VersePosition::new(2, 286));
+
+        let result = engine
+            .navigate(
+                1600.0,
+                VersePosition::new(2, 1),
+                Direction::Upwards,
+                excluding_settings,
+            )
+            .expect("Should navigate successfully");
+
+        println!("\n=== Navigation Result with Boundary Crossing ===");
+        println!("{result}");
+        println!("================================================\n");
+
+        // Verify that boundary crossing was detected
+        assert!(
+            result.cycle_info.crossed_boundaries(),
+            "Navigation should detect boundary crossing"
+        );
+
+        // The verse should be somewhere in the higher suras (around 110-114)
+        // because we wrapped around
+        assert!(
+            result.verse.sura >= 78,
+            "After wrapping, should be in higher suras, got sura {}",
+            result.verse.sura
+        );
+
+        // This clarifies to the caller that the path was NOT linear (2 -> result.verse)
+        // but rather: (2,1) -> (2,286) -> (1,1) -> (1,7) -> (114,x) -> ... -> result.verse
+    }
+
+    #[test]
+    fn test_navigation_with_cycles() {
+        let engine = setup_engine();
+
+        // Navigate with a small bounded range and multiple iterations
+        let settings_with_cycles = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(1, 1))
+            .lower_bound(VersePosition::new(1, 7))
+            .iteration_limit(3);
+
+        // Navigate through Al-Fatiha multiple times
+        let result = engine
+            .navigate(
+                50.0, // Enough to cycle multiple times
+                VersePosition::new(1, 1),
+                Direction::Downwards,
+                settings_with_cycles,
+            )
+            .expect("Should navigate successfully");
+
+        println!("\n=== Navigation Result with Cycles ===");
+        println!("{result}");
+        println!("======================================\n");
+
+        // Verify cycles were tracked
+        assert!(
+            result.cycle_info.cycles_completed() > 0,
+            "Should complete at least one cycle, got {}",
+            result.cycle_info.cycles_completed()
+        );
+
+        // This helps the caller understand that we went through the same range multiple times
+        println!(
+            "Completed {} cycles through Al-Fatiha (verses 1-7)",
+            result.cycle_info.cycles_completed()
+        );
+    }
+
+    #[test]
+    fn test_inverse_relationship_navigate_to_calculate_lines() {
+        let engine = setup_engine();
+
+        // Test: navigate → calculate_lines with cycle_distance
+        // Navigate from start to some position, then verify we can reconstruct the distance
+        let settings = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(1, 1))
+            .lower_bound(VersePosition::new(1, 7))
+            .iteration_limit(5);
+
+        let start = VersePosition::new(1, 1);
+        let lines_to_navigate = 25.0;
+
+        let result = engine
+            .navigate(lines_to_navigate, start, Direction::Downwards, settings)
+            .expect("Should navigate successfully");
+
+        // Now calculate direct distance from start to end
+        let direct_distance = engine
+            .calculate_lines(start, result.verse, Direction::Downwards, settings)
+            .expect("Should calculate lines");
+
+        // Reconstruct total distance using the formula:
+        // When cycles_completed > 0, the formula is:
+        // distance = (cycles_completed - 1) * cycle_distance + direct_distance
+        //
+        // This works because:
+        // - cycles_completed counts passes through the start verse
+        // - Each pass adds one cycle_distance worth of lines
+        // - The current (partial or complete) cycle contributes direct_distance
+        // - So we have (N-1) complete previous cycles + current cycle
+        let reconstructed_distance = result.cycle_info.reconstruct_distance(direct_distance);
+
+        println!(
+            "Navigate: distance_moved={}, cycles={}, cycle_distance={}, direct={}, reconstructed={}, diff={}",
+            result.distance_moved,
+            result.cycle_info.cycles_completed(),
+            result.cycle_info.cycle_distance(),
+            direct_distance,
+            reconstructed_distance,
+            (reconstructed_distance - result.distance_moved).abs()
+        );
+
+        // Verify the reconstructed distance matches distance_moved
+        let diff = (reconstructed_distance - result.distance_moved).abs();
+        assert!(
+            diff < 0.1,
+            "Reconstructed distance ({}) should match distance_moved ({}), diff={}",
+            reconstructed_distance,
+            result.distance_moved,
+            diff
+        );
+
+        // Verify that if we navigate with the reconstructed distance, we get the same result
+        let verify_result = engine
+            .navigate(
+                reconstructed_distance,
+                start,
+                Direction::Downwards,
+                settings,
+            )
+            .expect("Should navigate successfully");
+
+        // Should reach the same or very close verse
+        assert_eq!(
+            verify_result.verse.sura, result.verse.sura,
+            "Should reach same sura"
+        );
+        assert!(
+            ((verify_result.verse.number as i32) - (result.verse.number as i32)).abs()
+                <= VERSE_TOLERANCE_SMALL,
+            "Should reach same or nearby verse, got {} vs {}",
+            verify_result.verse.number,
+            result.verse.number
+        );
+    }
+
+    #[test]
+    fn test_inverse_relationship_calculate_lines_to_navigate() {
+        let engine = setup_engine();
+
+        // Test: Using cycle_distance to navigate with cycles
+        // First navigate to discover cycle_distance, then use it to navigate precisely
+        let settings = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(2, 1))
+            .lower_bound(VersePosition::new(2, 50))
+            .iteration_limit(3);
+
+        let start = VersePosition::new(2, 1);
+        let end = VersePosition::new(2, 30);
+
+        // First, do a navigation to discover the cycle_distance
+        let discovery_result = engine
+            .navigate(100.0, start, Direction::Downwards, settings)
+            .expect("Should navigate successfully");
+
+        // Only proceed if we actually completed at least one cycle
+        if discovery_result.cycle_info.cycles_completed() > 0
+            && discovery_result.cycle_info.cycle_distance() > 0.0
+        {
+            println!(
+                "Discovered cycle_distance: {}",
+                discovery_result.cycle_info.cycle_distance()
+            );
+
+            // Now calculate direct distance from start to end
+            let direct_distance = engine
+                .calculate_lines(start, end, Direction::Downwards, settings)
+                .expect("Should calculate lines");
+
+            // Compute total lines for 1 cycle + direct distance to end
+            let desired_cycles = 1;
+            let total_lines = (desired_cycles as f32)
+                * discovery_result.cycle_info.cycle_distance()
+                + direct_distance;
+
+            // Navigate with this computed distance
+            let result = engine
+                .navigate(total_lines, start, Direction::Downwards, settings)
+                .expect("Should navigate successfully");
+
+            // Verify we reached the end position (or very close, due to rounding)
+            assert_eq!(
+                result.verse.sura,
+                end.sura(),
+                "Navigation should reach same sura, got {}",
+                result.verse.sura
+            );
+            assert!(
+                ((result.verse.number as i32) - (end.verse() as i32)).abs()
+                    <= VERSE_TOLERANCE_LARGE,
+                "Navigation should reach end position or nearby, got ({},{}) vs ({},{})",
+                result.verse.sura,
+                result.verse.number,
+                end.sura(),
+                end.verse()
+            );
+
+            // Verify we completed approximately the desired number of cycles
+            assert!(
+                result.cycle_info.cycles_completed() >= desired_cycles
+                    || result.cycle_info.crossed_boundaries(),
+                "Should complete at least {} cycles, got {}",
+                desired_cycles,
+                result.cycle_info.cycles_completed()
+            );
+        }
+    }
+
+    #[test]
+    fn test_inverse_relationship_with_excluding_bounds() {
+        let engine = setup_engine();
+
+        // Test inverse relationship with excluding bounds using cycle_distance
+        let excluding_settings = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(2, 20))
+            .lower_bound(VersePosition::new(2, 10));
+
+        let start = VersePosition::new(2, 1);
+        let lines_to_navigate = 15.0;
+
+        let result = engine
+            .navigate(
+                lines_to_navigate,
+                start,
+                Direction::Downwards,
+                excluding_settings,
+            )
+            .expect("Should navigate successfully");
+
+        // Calculate direct distance from start to result
+        let direct_distance = engine
+            .calculate_lines(
+                start,
+                result.verse,
+                Direction::Downwards,
+                excluding_settings,
+            )
+            .expect("Should calculate lines");
+
+        // Reconstruct total distance using the formula
+        let reconstructed_distance = result.cycle_info.reconstruct_distance(direct_distance);
+
+        assert!(
+            (reconstructed_distance - result.distance_moved).abs() < LINE_TOLERANCE,
+            "With excluding bounds: Reconstructed ({}) should match distance_moved ({})",
+            reconstructed_distance,
+            result.distance_moved
+        );
+    }
+
+    #[test]
+    #[ignore] // Manual debugging test with no assertions
+    fn manual_free_tests() {
+        let engine = setup_engine();
+
+        let result = engine
+            .navigate(
+                100.0,
+                VersePosition::new(1, 1),
+                Direction::Downwards,
+                Default::default(),
+            )
+            .expect("Should navigate successfully");
+        println!("{result}");
+
+        let result = engine
+            .navigate(
+                100.0,
+                VersePosition::new(1, 1),
+                Direction::Downwards,
+                Default::default(),
+            )
+            .expect("Should navigate successfully");
+        println!("{result}");
+
+        let result = engine
+            .navigate(
+                100.0,
+                VersePosition::new(1, 1),
+                Direction::Downwards,
+                Default::default(),
+            )
+            .expect("Should navigate successfully");
+        println!("{result}");
     }
 }

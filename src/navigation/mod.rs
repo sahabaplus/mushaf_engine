@@ -12,7 +12,7 @@ pub use direction::Direction;
 pub use error::{CalculatingLinesError, LookupError, NavigationError};
 pub use last_verse_result::LastVerseResult;
 pub use navigation_bounds::NavigationBounds;
-pub use navigation_result::NavigationResult;
+pub use navigation_result::{CycleInfo, NavigationResult};
 pub use navigation_settings::NavigationSettings;
 pub use overflow_result::OverflowResult;
 pub use verse_navigator::VersesNavigator;

@@ -186,52 +186,6 @@ impl NavigationBounds {
         self
     }
 
-    /// Sets the upper bound for the bounds.
-    ///
-    /// # Arguments
-    /// * `upper_bound` - Upper bound for navigation
-    ///
-    /// # Bounds Behavior
-    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
-    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
-    ///
-    /// let bounds = NavigationBounds::default()
-    ///     .upper_bound(VersePosition::new(2, 1)); // Upper bound at Al-Baqarah
-    /// ```
-    #[must_use]
-    pub fn upper_bound(mut self, upper_bound: VersePosition) -> Self {
-        self.upper_bound = upper_bound;
-        self
-    }
-
-    /// Sets the lower bound for the bounds.
-    ///
-    /// # Arguments
-    /// * `lower_bound` - Lower bound for navigation
-    ///
-    /// # Bounds Behavior
-    /// - When `upper_bound < lower_bound`: Navigate from upper_bound to lower_bound (inclusive)
-    /// - When `upper_bound > lower_bound`: Navigate on the whole range EXCLUDING the range from lower_bound to upper_bound (inclusive)
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
-    ///
-    /// let bounds = NavigationBounds::default()
-    ///     .lower_bound(VersePosition::new(2, 286)); // Lower bound at end of Al-Baqarah
-    /// ```
-    #[must_use]
-    pub fn lower_bound(mut self, lower_bound: VersePosition) -> Self {
-        self.lower_bound = lower_bound;
-        self
-    }
-
     /// Checks if the bounds are in excluding mode.
     ///
     /// # Returns
@@ -259,5 +213,17 @@ impl NavigationBounds {
     #[must_use]
     pub fn is_excluding_mode(&self) -> bool {
         self.upper_bound > self.lower_bound
+    }
+
+    /// Get the upper bound
+    #[must_use]
+    pub fn upper_bound(&self) -> VersePosition {
+        self.upper_bound
+    }
+
+    /// Get the lower bound
+    #[must_use]
+    pub fn lower_bound(&self) -> VersePosition {
+        self.lower_bound
     }
 }

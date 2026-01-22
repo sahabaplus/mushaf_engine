@@ -534,7 +534,18 @@ impl VersesNavigator {
 
         // Before we move to the next verse, check if we have reached the lower bound
         if end_bound.eq(self.current_verse()) {
-            // We reached the lower bound.
+            // Either end of quran, or the lower bound. We need to reset the position, or to
+            // stop the navigation if we ran out of iterations.
+
+            if end_bound.eq(&VersePosition::end()) {
+                // Reset to the start of the quran iff the lower bound is NOT the end of the quran
+                let lower_bound = self.settings.bounds.lower_bound;
+                if !lower_bound.eq(&VersePosition::end()) {
+                    self.reset_position(VersePosition::start());
+                    return Some(self.current_verse());
+                }
+            }
+
             if remaining_iterations > 0 {
                 self.iteration_count += 1;
                 self.reset_position(start_bound);

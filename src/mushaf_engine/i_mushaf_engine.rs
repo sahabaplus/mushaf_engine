@@ -103,4 +103,20 @@ pub trait IMushafEngine {
         direction: Direction,
         settings: NavigationSettings,
     ) -> Option<Verse>;
+
+    /// Find the previous verse from a given verse in the specified direction
+    ///
+    /// # Arguments
+    /// * `from` - Verse position to start from
+    /// * `direction` - Direction to navigate
+    /// * `settings` - Navigation settings
+    ///
+    /// # Returns
+    /// The previous verse or None if at the start
+    fn previous_verse(
+        &self,
+        from: impl Into<VersePosition>,
+        direction: Direction,
+        settings: NavigationSettings,
+    ) -> Option<Verse>;
 }

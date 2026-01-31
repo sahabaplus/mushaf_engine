@@ -587,6 +587,114 @@ impl VersesNavigator {
         None
     }
 
+    /// Moves to the previous verse based on direction and iteration bounds.
+    ///
+    /// This is the inverse of the `next_verse()` method, allowing backward navigation
+    /// through verses while respecting iteration limits and bounded ranges.
+    ///
+    /// # Iteration Behavior
+    ///
+    /// The method implements the following iteration logic:
+    /// 1. Check if current position equals the `start_position`
+    /// 2. If at start position and iterations remain: increment count and reset to `end_position`
+    /// 3. If at start position and no iterations remain: return `None` (stop navigation)
+    /// 4. Otherwise: move to previous verse in the specified direction
+    ///
+    /// # Return Value
+    /// * `Some(&Verse)` - Successfully moved to previous verse
+    /// * `None` - Reached start of bounds with no remaining iterations
+    ///
+    /// # Examples
+    ///
+    /// ## Basic Backward Navigation
+    /// ```ignore
+    /// let mut navigator = VersesNavigator::builder(mushaf, metadata)
+    ///     .upper_bound(VersePosition::new(1, 1))
+    ///     .lower_bound(VersePosition::new(1, 7))
+    ///     .iteration_limit(0); // No cycling
+    ///
+    /// // Start at end of Al-Fatiha
+    /// navigator.reset_position(VersePosition::new(1, 7));
+    ///
+    /// // Navigate backward through Al-Fatiha
+    /// while let Some(verse) = navigator.previous_verse() {
+    ///     println!("{}", verse);
+    /// }
+    /// ```
+    ///
+    /// ## Direction-Aware Backward Navigation
+    /// ```ignore
+    /// let mut navigator = VersesNavigator::builder(mushaf, metadata)
+    ///     .upper_bound(VersePosition::new(2, 1))
+    ///     .lower_bound(VersePosition::new(2, 5))
+    ///     .direction(Direction::Upwards); // Navigate backwards
+    ///
+    /// // Navigate backward from (2,5) to (2,1)
+    /// while let Some(verse) = navigator.previous_verse() {
+    ///     println!("{}", verse);
+    /// }
+    /// ```
+    pub fn previous_verse(&mut self) -> Option<&Verse> {
+        let start_bound = self.get_start_bound();
+        let end_bound = self.get_end_bound();
+        let remaining_iterations = self
+            .settings
+            .bounds
+            .iteration_limit
+            .saturating_sub(self.iteration_count);
+
+        // Before moving, check if we're at the start bound
+        if start_bound.eq(self.current_verse()) {
+            // Handle wrapping at start of Quran for downward direction
+            if start_bound.eq(&VersePosition::start()) {
+                let upper_bound = self.settings.bounds.upper_bound;
+                if !upper_bound.eq(&VersePosition::start()) {
+                    self.reset_position(VersePosition::end());
+                    return Some(self.current_verse());
+                }
+            }
+
+            if remaining_iterations > 0 {
+                self.iteration_count += 1;
+                self.reset_position(end_bound);
+                return Some(self.current_verse());
+            } else {
+                return None;
+            }
+        }
+
+        // Move to previous verse based on direction
+        let has_verse = match self.direction {
+            Direction::Downwards => self.prev_verse_downward().is_ok(),
+            Direction::Upwards => self.prev_verse_upward().is_ok(),
+        };
+
+        if has_verse {
+            // In excluding mode, skip over excluded verses
+            if self.settings.bounds.is_excluding_mode() {
+                loop {
+                    let current = self.current_verse();
+                    let current_pos = VersePosition::new(current.sura, current.number);
+
+                    if !self.is_out_of_bounds(current_pos) {
+                        break;
+                    }
+
+                    let moved = match self.direction {
+                        Direction::Downwards => self.prev_verse_downward().is_ok(),
+                        Direction::Upwards => self.prev_verse_upward().is_ok(),
+                    };
+                    if !moved {
+                        return None;
+                    }
+                }
+            }
+            return Some(self.current_verse());
+        }
+
+        None
+    }
+
     /// Attempts to advance to the next verse within the current sura.
     ///
     /// This method tries to move forward by one verse while ensuring the navigator
@@ -660,6 +768,73 @@ impl VersesNavigator {
         }
 
         unreachable!()
+    }
+
+    /// Move to the previous verse in downward direction
+    fn prev_verse_downward(&mut self) -> Result<(), ()> {
+        if self.backward_index(1).is_some() {
+            return Ok(());
+        }
+        Err(())
+    }
+
+    /// Attempts to retreat to the previous verse within the current sura.
+    ///
+    /// This method tries to move backward by one verse while ensuring the navigator
+    /// stays within the same sura. If the backward movement would cross into a
+    /// different sura, the operation is rolled back and returns `false`.
+    ///
+    /// # Behavior
+    /// 1. Captures current verse position
+    /// 2. Attempts to move backward by one verse
+    /// 3. Checks if the new verse is in the same sura
+    /// 4. If different sura: rolls back and returns `false`
+    /// 5. If same sura: keeps the new position and returns `true`
+    ///
+    /// # Returns
+    /// * `true` - Successfully moved to previous verse in the same sura
+    /// * `false` - Movement would cross sura boundary, position unchanged
+    fn try_retreat_within_current_sura(&mut self) -> bool {
+        let pre_current_verse = *self.current_verse();
+        let backward_movement = self.backward_index(1).is_some();
+        if backward_movement {
+            if self.current_verse().sura == pre_current_verse.sura {
+                return true;
+            }
+            // Rollback
+            self.forward_index(1);
+        }
+        false
+    }
+
+    fn move_next_sura(&mut self, current_sura: u8) -> Result<&Verse, LookupError> {
+        // When at sura 114 in upward navigation's previous, wrap to sura 1
+        let target_sura = if current_sura == 114 {
+            1
+        } else {
+            current_sura + 1
+        };
+
+        let next_sura = self.quran_metadata.get_sura_info(target_sura)?;
+        // For upward direction's "previous", go to end of next sura
+        let last_verse_position = VersePosition::new(next_sura.number, next_sura.total_verses);
+        let (_, page, idx) = self.find_verse(last_verse_position)?;
+        self.current_page_idx = (page as usize) - 1;
+        self.current_verse_idx = idx as usize;
+        Ok(self.current_verse())
+    }
+
+    /// Move to the previous verse in upward direction
+    fn prev_verse_upward(&mut self) -> Result<(), ()> {
+        // Try to go backward within current sura
+        if self.try_retreat_within_current_sura() {
+            return Ok(());
+        }
+        // Move to the next sura (in upward navigation, "previous" means higher sura number)
+        match self.move_next_sura(self.current_verse().sura) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(()),
+        }
     }
 
     /// Find a verse in the mushaf and return its location (`Verse`, `page`, `index_of_verse`)
@@ -1714,5 +1889,353 @@ mod test {
         assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 50));
         // End of sura 2 (verse 286) is out of bounds (> 100), should return lower_bound
         assert_eq!(navigator.get_end_bound(), VersePosition::new(2, 100));
+    }
+
+    // ==================== previous_verse tests ====================
+
+    #[test]
+    fn test_previous_verse_basic_downward() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
+
+        // Start at verse 5 of Al-Fatiha
+        navigator
+            .reset_position(VersePosition::new(1, 5))
+            .expect("Should reset to (1,5)");
+        assert_eq!(navigator.current_verse().number, 5);
+
+        // Go back to verse 4
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 4);
+
+        // Go back to verse 3
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 3);
+    }
+
+    #[test]
+    fn test_previous_verse_cross_sura_downward() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
+
+        // Start at verse 1 of Sura 2 (Al-Baqarah)
+        navigator
+            .reset_position(VersePosition::new(2, 1))
+            .expect("Should reset to (2,1)");
+
+        // Go back - should cross to Sura 1 verse 7
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 7);
+    }
+
+    #[test]
+    fn test_previous_verse_at_start_of_quran_downward_no_wrap() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
+
+        // Start at verse 1 of Sura 1 (start of Quran)
+        navigator
+            .reset_position(VersePosition::new(1, 1))
+            .expect("Should reset to (1,1)");
+
+        // With default settings (upper_bound = start), previous returns None at start
+        let verse = navigator.previous_verse();
+        assert!(verse.is_none(), "At start of Quran with default bounds, previous should return None");
+    }
+
+    #[test]
+    fn test_previous_verse_at_start_with_iteration_cycles_to_end() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards)
+                .iteration_limit(1);
+
+        // Start at verse 1 of Sura 1 (start of Quran)
+        navigator
+            .reset_position(VersePosition::new(1, 1))
+            .expect("Should reset to (1,1)");
+
+        // With iteration_limit = 1, at start bound should cycle to end bound
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 114);
+        assert_eq!(verse.number, 6); // End of Quran
+    }
+
+    #[test]
+    fn test_previous_verse_basic_upward() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Upwards);
+
+        // In upward direction, start at verse 3 of Sura 2
+        navigator
+            .reset_position(VersePosition::new(2, 3))
+            .expect("Should reset to (2,3)");
+
+        // Previous in upward direction goes backward within sura first
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 2);
+    }
+
+    #[test]
+    fn test_previous_verse_cross_sura_upward() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Upwards);
+
+        // Start at first verse of Sura 2
+        navigator
+            .reset_position(VersePosition::new(2, 1))
+            .expect("Should reset to (2,1)");
+
+        // Previous in upward direction should go to end of Sura 3
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 3);
+        // Sura 3 (Ali 'Imran) has 200 verses
+        assert_eq!(verse.number, 200);
+    }
+
+    #[test]
+    fn test_previous_verse_with_bounds_and_iteration() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards)
+                .upper_bound(VersePosition::new(1, 1))
+                .lower_bound(VersePosition::new(1, 7))
+                .iteration_limit(2);
+
+        // Start at verse 3
+        navigator
+            .reset_position(VersePosition::new(1, 3))
+            .expect("Should reset to (1,3)");
+
+        // Go back to verse 2
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        assert_eq!(verse.expect("expect verse").number, 2);
+
+        // Go back to verse 1 (start bound)
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        assert_eq!(verse.expect("expect verse").number, 1);
+
+        // At start bound with iterations remaining, should cycle to end bound (verse 7)
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 7);
+        assert_eq!(navigator.iteration_count, 1);
+    }
+
+    #[test]
+    fn test_previous_verse_stops_at_bound_without_iterations() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards)
+                .upper_bound(VersePosition::new(1, 1))
+                .lower_bound(VersePosition::new(1, 7))
+                .iteration_limit(0); // No cycling
+
+        // Start at verse 1 (start bound)
+        navigator
+            .reset_position(VersePosition::new(1, 1))
+            .expect("Should reset to (1,1)");
+
+        // At start bound with no iterations, should return None
+        let verse = navigator.previous_verse();
+        assert!(verse.is_none());
+    }
+
+    #[test]
+    fn test_previous_verse_excluding_mode() {
+        let (mushaf, metadata) = get_mushaf();
+        // Exclude verses strictly between (2,10) and (2,20) - so verses 11-19 are excluded
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards)
+                .upper_bound(VersePosition::new(2, 20)) // upper > lower = excluding mode
+                .lower_bound(VersePosition::new(2, 10))
+                .iteration_limit(0);
+
+        // Start at verse 20 (upper bound, not excluded)
+        navigator
+            .reset_position(VersePosition::new(2, 20))
+            .expect("Should reset to (2,20)");
+
+        // Previous should skip to verse 10 (lower bound, not excluded)
+        // because verses 11-19 are excluded
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 10);
+
+        // Next previous should be verse 9
+        let verse = navigator.previous_verse();
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 9);
+    }
+
+    #[test]
+    fn test_next_then_previous_returns_to_original() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
+
+        // Start at a middle verse
+        navigator
+            .reset_position(VersePosition::new(2, 100))
+            .expect("Should reset to (2,100)");
+
+        let original_verse = *navigator.current_verse();
+
+        // Go forward
+        navigator.next_verse();
+        let next_verse = *navigator.current_verse();
+        assert_eq!(next_verse.number, 101);
+
+        // Go back
+        navigator.previous_verse();
+        let back_verse = *navigator.current_verse();
+
+        // Should be back at original
+        assert_eq!(back_verse.sura, original_verse.sura);
+        assert_eq!(back_verse.number, original_verse.number);
+    }
+
+    #[test]
+    fn test_previous_then_next_returns_to_original() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
+
+        // Start at a middle verse
+        navigator
+            .reset_position(VersePosition::new(2, 100))
+            .expect("Should reset to (2,100)");
+
+        let original_verse = *navigator.current_verse();
+
+        // Go backward
+        navigator.previous_verse();
+        let prev_verse = *navigator.current_verse();
+        assert_eq!(prev_verse.number, 99);
+
+        // Go forward
+        navigator.next_verse();
+        let forward_verse = *navigator.current_verse();
+
+        // Should be back at original
+        assert_eq!(forward_verse.sura, original_verse.sura);
+        assert_eq!(forward_verse.number, original_verse.number);
+    }
+
+    #[test]
+    fn test_comprehensive_previous_downwards() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
+
+        // Start at end of Quran
+        navigator
+            .reset_position(VersePosition::end())
+            .expect("Should reset to end");
+
+        // Navigate backward through several verses
+        let mut prev_verse = *navigator.current_verse();
+        for _ in 0..20 {
+            let verse = navigator.previous_verse();
+            assert!(verse.is_some(), "Should be able to go backward");
+            let verse = verse.expect("expect verse");
+
+            // Verify we're actually going backward
+            let prev_pos = VersePosition::new(prev_verse.sura, prev_verse.number);
+            let curr_pos = VersePosition::new(verse.sura, verse.number);
+            assert!(
+                curr_pos < prev_pos,
+                "Current {:?} should be less than previous {:?}",
+                curr_pos,
+                prev_pos
+            );
+
+            prev_verse = *verse;
+        }
+    }
+
+    #[test]
+    fn test_move_next_sura() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Upwards);
+
+        // Start at first verse of Sura 2
+        navigator
+            .reset_position(VersePosition::new(2, 1))
+            .expect("Should reset to (2,1)");
+
+        // move_next_sura should go to end of Sura 3
+        let verse = navigator.move_next_sura(2);
+        assert!(verse.is_ok());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 3);
+        assert_eq!(verse.number, 200); // Sura 3 has 200 verses
+
+        // From sura 114, should wrap to sura 1
+        let verse = navigator.move_next_sura(114);
+        assert!(verse.is_ok());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 7); // Sura 1 has 7 verses
+    }
+
+    #[test]
+    fn test_try_retreat_within_current_sura() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator =
+            VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
+
+        // Start at verse 5 of Sura 2
+        navigator
+            .reset_position(VersePosition::new(2, 5))
+            .expect("Should reset to (2,5)");
+
+        // Should succeed - moving back within same sura
+        let result = navigator.try_retreat_within_current_sura();
+        assert!(result);
+        assert_eq!(navigator.current_verse().number, 4);
+        assert_eq!(navigator.current_verse().sura, 2);
+
+        // Reset to verse 1 of Sura 2
+        navigator
+            .reset_position(VersePosition::new(2, 1))
+            .expect("Should reset to (2,1)");
+
+        // Should fail - can't retreat within sura from verse 1
+        let result = navigator.try_retreat_within_current_sura();
+        assert!(!result);
+        // Position should be unchanged
+        assert_eq!(navigator.current_verse().number, 1);
+        assert_eq!(navigator.current_verse().sura, 2);
     }
 }

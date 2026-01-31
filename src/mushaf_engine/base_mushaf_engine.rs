@@ -314,6 +314,17 @@ impl IMushafEngine for BaseMushafEngine {
         navigator.reset_position(from);
         navigator.next_verse().copied()
     }
+
+    fn previous_verse(
+        &self,
+        from: impl Into<VersePosition>,
+        direction: Direction,
+        settings: NavigationSettings,
+    ) -> Option<Verse> {
+        let mut navigator = self.create_navigator(settings, direction);
+        navigator.reset_position(from);
+        navigator.previous_verse().copied()
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -1104,5 +1115,211 @@ mod tests {
             )
             .expect("Should navigate successfully");
         println!("{result}");
+    }
+
+    // ==================== previous_verse tests ====================
+
+    #[test]
+    fn test_previous_verse_basic() {
+        let engine = setup_engine();
+
+        // Test basic previous verse navigation
+        let verse = engine.previous_verse(
+            VersePosition::new(2, 5),
+            Direction::Downwards,
+            Default::default(),
+        );
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 4);
+    }
+
+    #[test]
+    fn test_previous_verse_cross_sura() {
+        let engine = setup_engine();
+
+        // Test crossing sura boundary backwards
+        let verse = engine.previous_verse(
+            VersePosition::new(2, 1),
+            Direction::Downwards,
+            Default::default(),
+        );
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 7);
+    }
+
+    #[test]
+    fn test_previous_verse_at_start_of_quran_no_wrap() {
+        let engine = setup_engine();
+
+        // At start of Quran with default settings, should return None
+        let verse = engine.previous_verse(
+            VersePosition::start(),
+            Direction::Downwards,
+            Default::default(),
+        );
+        assert!(verse.is_none(), "At start of Quran with default bounds, previous should return None");
+    }
+
+    #[test]
+    fn test_previous_verse_at_start_with_iteration_cycles_to_end() {
+        let engine = setup_engine();
+
+        // With iteration_limit, at start should cycle to end
+        let settings = NavigationSettings::builder().iteration_limit(1);
+
+        let verse = engine.previous_verse(
+            VersePosition::start(),
+            Direction::Downwards,
+            settings,
+        );
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 114);
+        assert_eq!(verse.number, 6); // End of Quran
+    }
+
+    #[test]
+    fn test_previous_verse_upward_direction() {
+        let engine = setup_engine();
+
+        // In upward direction, previous goes to next sura's end
+        let verse = engine.previous_verse(
+            VersePosition::new(2, 1),
+            Direction::Upwards,
+            Default::default(),
+        );
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 3);
+        assert_eq!(verse.number, 200); // Sura 3 has 200 verses
+    }
+
+    #[test]
+    fn test_next_and_previous_verse_inverse() {
+        let engine = setup_engine();
+        let start = VersePosition::new(5, 50);
+
+        // Get next verse
+        let next = engine
+            .next_verse(start, Direction::Downwards, Default::default())
+            .expect("Should have next verse");
+        assert_eq!(next.sura, 5);
+        assert_eq!(next.number, 51);
+
+        // Get previous of the next should return to start
+        let prev = engine
+            .previous_verse(next, Direction::Downwards, Default::default())
+            .expect("Should have previous verse");
+        assert_eq!(prev.sura, start.sura());
+        assert_eq!(prev.number, start.verse());
+    }
+
+    #[test]
+    fn test_previous_and_next_verse_inverse() {
+        let engine = setup_engine();
+        let start = VersePosition::new(5, 50);
+
+        // Get previous verse
+        let prev = engine
+            .previous_verse(start, Direction::Downwards, Default::default())
+            .expect("Should have previous verse");
+        assert_eq!(prev.sura, 5);
+        assert_eq!(prev.number, 49);
+
+        // Get next of the previous should return to start
+        let next = engine
+            .next_verse(prev, Direction::Downwards, Default::default())
+            .expect("Should have next verse");
+        assert_eq!(next.sura, start.sura());
+        assert_eq!(next.number, start.verse());
+    }
+
+    #[test]
+    fn test_previous_verse_with_bounds() {
+        let engine = setup_engine();
+        let settings = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(2, 1))
+            .lower_bound(VersePosition::new(2, 50))
+            .iteration_limit(0);
+
+        // At start bound without iteration, should return None
+        let verse = engine.previous_verse(VersePosition::new(2, 1), Direction::Downwards, settings);
+        assert!(verse.is_none());
+
+        // Not at start bound, should work
+        let verse = engine.previous_verse(VersePosition::new(2, 10), Direction::Downwards, settings);
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 9);
+    }
+
+    #[test]
+    fn test_previous_verse_with_bounds_and_iteration() {
+        let engine = setup_engine();
+        let settings = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(1, 1))
+            .lower_bound(VersePosition::new(1, 7))
+            .iteration_limit(1);
+
+        // At start bound with iteration, should cycle to end bound
+        let verse = engine.previous_verse(VersePosition::new(1, 1), Direction::Downwards, settings);
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 1);
+        assert_eq!(verse.number, 7); // Cycled to end bound
+    }
+
+    #[test]
+    fn test_previous_verse_excluding_mode() {
+        let engine = setup_engine();
+        // Exclude verses 11-19 of Sura 2
+        let settings = NavigationSettings::builder()
+            .upper_bound(VersePosition::new(2, 20)) // upper > lower = excluding mode
+            .lower_bound(VersePosition::new(2, 10));
+
+        // From verse 20, previous should skip to verse 10
+        let verse = engine.previous_verse(VersePosition::new(2, 20), Direction::Downwards, settings);
+        assert!(verse.is_some());
+        let verse = verse.expect("expect verse");
+        assert_eq!(verse.sura, 2);
+        assert_eq!(verse.number, 10); // Skipped 11-19
+    }
+
+    #[test]
+    fn test_previous_verse_comprehensive_traversal() {
+        let engine = setup_engine();
+
+        // Start from end of Quran and traverse backwards
+        let mut current = VersePosition::end();
+        let mut count = 0;
+        let max_iterations = 100;
+
+        while count < max_iterations {
+            let verse = engine.previous_verse(current, Direction::Downwards, Default::default());
+            if verse.is_none() {
+                break;
+            }
+            let verse = verse.expect("expect verse");
+
+            // Verify we're going backwards
+            let current_pos = VersePosition::new(verse.sura, verse.number);
+            assert!(
+                current_pos < current,
+                "Should be going backwards: {:?} < {:?}",
+                current_pos,
+                current
+            );
+
+            current = current_pos;
+            count += 1;
+        }
+
+        // Should have traversed multiple verses
+        assert!(count == max_iterations, "Should traverse {} verses", max_iterations);
     }
 }

@@ -259,17 +259,26 @@ impl VersesNavigator {
             match self.direction {
                 Direction::Downwards => b.lower_bound,
                 Direction::Upwards => {
-                    // End sura of the upper bound (make sure it is in bounds, if not, use lower bound)
-                    let end_of_sura = self
-                        .quran_metadata
-                        .get_sura_info(b.upper_bound.sura())
-                        .expect("expect `sura_info` not to be None")
-                        .total_verses;
-                    let end_of_sura = VersePosition::new(b.upper_bound.sura(), end_of_sura);
-                    if self.is_out_of_bounds(end_of_sura) {
+                    if b.upper_bound.verse() == 1 {
+                        // upper_bound starts at verse 1, so navigate to end of that sura
+                        // (or lower_bound if end of sura is out of bounds)
+                        let total_verses = self
+                            .quran_metadata
+                            .get_sura_info(b.upper_bound.sura())
+                            .expect("expect `sura_info` not to be None")
+                            .total_verses;
+                        let end_of_sura = VersePosition::new(b.upper_bound.sura(), total_verses);
+                        if self.is_out_of_bounds(end_of_sura) {
+                            b.lower_bound
+                        } else {
+                            end_of_sura
+                        }
+                    } else if b.upper_bound.sura() == b.lower_bound.sura() {
+                        // Same sura, partial range: end at lower_bound
                         b.lower_bound
                     } else {
-                        end_of_sura
+                        // Multi-sura with specific upper_bound verse: stop exactly at upper_bound
+                        b.upper_bound
                     }
                 }
             }
@@ -637,11 +646,8 @@ impl VersesNavigator {
     pub fn previous_verse(&mut self) -> Option<&Verse> {
         let start_bound = self.get_start_bound();
         let end_bound = self.get_end_bound();
-        let remaining_iterations = self
-            .settings
-            .bounds
-            .iteration_limit
-            .saturating_sub(self.iteration_count);
+        let remaining_iterations =
+            self.settings.bounds.iteration_limit.saturating_sub(self.iteration_count);
 
         // Before moving, check if we're at the start bound
         if start_bound.eq(self.current_verse()) {
@@ -1952,7 +1958,10 @@ mod test {
 
         // With default settings (upper_bound = start), previous returns None at start
         let verse = navigator.previous_verse();
-        assert!(verse.is_none(), "At start of Quran with default bounds, previous should return None");
+        assert!(
+            verse.is_none(),
+            "At start of Quran with default bounds, previous should return None"
+        );
     }
 
     #[test]
@@ -2158,9 +2167,7 @@ mod test {
             VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
 
         // Start at end of Quran
-        navigator
-            .reset_position(VersePosition::end())
-            .expect("Should reset to end");
+        navigator.reset_position(VersePosition::end()).expect("Should reset to end");
 
         // Navigate backward through several verses
         let mut prev_verse = *navigator.current_verse();
@@ -2237,5 +2244,24 @@ mod test {
         // Position should be unchanged
         assert_eq!(navigator.current_verse().number, 1);
         assert_eq!(navigator.current_verse().sura, 2);
+    }
+
+    #[test]
+    fn manual_navigation() {
+        let (mushaf, metadata) = get_mushaf();
+        let mut navigator = VersesNavigator::new(
+            mushaf,
+            metadata,
+            NavigationSettings::builder().upper_bound(VersePosition::new(83, 28)),
+            Direction::Upwards,
+        );
+
+        navigator.reset_position(VersePosition::new(90, 1));
+
+        while let Some(v) = navigator.next_verse() {
+            println!("{}", v);
+        }
+
+        assert_eq!(&VersePosition::new(83, 28), navigator.current_verse());
     }
 }

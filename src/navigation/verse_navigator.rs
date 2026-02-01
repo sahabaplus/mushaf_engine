@@ -407,7 +407,7 @@ impl VersesNavigator {
         if self.settings.bounds.is_excluding_mode() {
             // In excluding mode: verse is out of bounds if it's within the excluded range
             // (from lower_bound to upper_bound, exclusive)
-            let verse_pos = VersePosition::new(verse_sura, verse_number);
+            let verse_pos: VersePosition = verse.into();
             return verse_pos > lower_bound && verse_pos < upper_bound;
         }
 
@@ -565,9 +565,8 @@ impl VersesNavigator {
             if self.settings.bounds.is_excluding_mode() {
                 loop {
                     let current = self.current_verse();
-                    let current_pos = VersePosition::new(current.sura, current.number);
 
-                    if !self.is_out_of_bounds(current_pos) {
+                    if !self.is_out_of_bounds(current.into()) {
                         break;
                     }
 
@@ -661,9 +660,8 @@ impl VersesNavigator {
             if self.settings.bounds.is_excluding_mode() {
                 loop {
                     let current = self.current_verse();
-                    let current_pos = VersePosition::new(current.sura, current.number);
 
-                    if !self.is_out_of_bounds(current_pos) {
+                    if !self.is_out_of_bounds(current.into()) {
                         break;
                     }
 

@@ -575,7 +575,7 @@ fn test_inverse_relationship_navigate_to_calculate_lines() {
 
     // Now calculate direct distance from start to end
     let direct_distance = engine
-        .calculate_lines(start, result.verse, Direction::Downwards, settings)
+        .calculate_lines(start, &result.verse, Direction::Downwards, settings)
         .expect("Should calculate lines");
 
     // Reconstruct total distance using the formula:
@@ -728,7 +728,7 @@ fn test_inverse_relationship_with_excluding_bounds() {
     let direct_distance = engine
         .calculate_lines(
             start,
-            result.verse,
+            &result.verse,
             Direction::Downwards,
             excluding_settings,
         )
@@ -875,7 +875,7 @@ fn test_next_and_previous_verse_inverse() {
 
     // Get previous of the next should return to start
     let prev = engine
-        .previous_verse(next, Direction::Downwards, Default::default())
+        .previous_verse(&next, Direction::Downwards, Default::default())
         .expect("Should have previous verse");
     assert_eq!(prev.sura, start.sura());
     assert_eq!(prev.number, start.verse());
@@ -895,7 +895,7 @@ fn test_previous_and_next_verse_inverse() {
 
     // Get next of the previous should return to start
     let next = engine
-        .next_verse(prev, Direction::Downwards, Default::default())
+        .next_verse(&prev, Direction::Downwards, Default::default())
         .expect("Should have next verse");
     assert_eq!(next.sura, start.sura());
     assert_eq!(next.number, start.verse());

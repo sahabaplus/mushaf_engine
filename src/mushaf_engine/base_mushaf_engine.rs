@@ -58,7 +58,7 @@ impl BaseMushafEngine {
             .0;
 
         let lines_distance = self
-            .calculate_lines(*current_verse, *last_verse, direction, Default::default())
+            .calculate_lines(current_verse, last_verse, direction, Default::default())
             .expect("Lines calculation should succeed")
             - current_verse.lines;
 
@@ -83,17 +83,17 @@ impl BaseMushafEngine {
             return last_of_page;
         }
 
-        let (_, page, _idx) = self.navigator.find_verse(*current_verse).ok()?;
+        let (_, page, _idx) = self.navigator.find_verse(current_verse).ok()?;
         let new_last_of_page = self.mushaf.get_page(page)?.verses().last()?;
 
-        if VersesNavigator::is_wrong_direction(*current_verse, *new_last_of_page, direction) {
+        if VersesNavigator::is_wrong_direction(current_verse, new_last_of_page, direction) {
             return last_of_page;
         }
 
         let lines_distance = self
             .calculate_lines(
-                *current_verse,
-                *new_last_of_page,
+                current_verse,
+                new_last_of_page,
                 direction,
                 Default::default(),
             )
@@ -150,7 +150,7 @@ impl IMushafEngine for BaseMushafEngine {
         let mut remaining_lines = lines;
 
         let mut navigator = self.create_navigator(settings, direction);
-        navigator.reset_position(*verse).map_err(|_| NavigationError::OutOfBounds)?;
+        navigator.reset_position(verse).map_err(|_| NavigationError::OutOfBounds)?;
 
         let mut overflow: Option<OverflowResult> = None;
         let mut previous_verse = *navigator.current_verse();

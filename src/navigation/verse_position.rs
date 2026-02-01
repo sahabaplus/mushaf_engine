@@ -60,8 +60,8 @@ impl PartialEq<Verse> for VersePosition {
 }
 
 // From Verse
-impl From<Verse> for VersePosition {
-    fn from(verse: Verse) -> Self {
+impl From<&Verse> for VersePosition {
+    fn from(verse: &Verse) -> Self {
         Self(verse.sura, verse.number)
     }
 }

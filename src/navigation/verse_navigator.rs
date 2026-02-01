@@ -545,16 +545,6 @@ impl VersesNavigator {
         if end_bound.eq(self.current_verse()) {
             // Either end of quran, or the lower bound. We need to reset the position, or to
             // stop the navigation if we ran out of iterations.
-
-            if end_bound.eq(&VersePosition::end()) {
-                // Reset to the start of the quran iff the lower bound is NOT the end of the quran
-                let lower_bound = self.settings.bounds.lower_bound;
-                if !lower_bound.eq(&VersePosition::end()) {
-                    self.reset_position(VersePosition::start());
-                    return Some(self.current_verse());
-                }
-            }
-
             if remaining_iterations > 0 {
                 self.iteration_count += 1;
                 self.reset_position(start_bound);
@@ -651,15 +641,6 @@ impl VersesNavigator {
 
         // Before moving, check if we're at the start bound
         if start_bound.eq(self.current_verse()) {
-            // Handle wrapping at start of Quran for downward direction
-            if start_bound.eq(&VersePosition::start()) {
-                let upper_bound = self.settings.bounds.upper_bound;
-                if !upper_bound.eq(&VersePosition::start()) {
-                    self.reset_position(VersePosition::end());
-                    return Some(self.current_verse());
-                }
-            }
-
             if remaining_iterations > 0 {
                 self.iteration_count += 1;
                 self.reset_position(end_bound);

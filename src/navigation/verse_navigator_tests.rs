@@ -763,10 +763,11 @@ fn test_excluding_mode_get_bounds() {
     .lower_bound(VersePosition::new(2, 286)); // Al-Baqarah ends at verse 286
 
     // In excluding mode with upwards direction:
-    // start_bound = start of sura containing lower_bound = (2, 1)
+    // Upward navigation reads suras in reverse order (114→1), starting at first verse of last sura
+    // start_bound = (114, 1) - first verse of last sura
     let start_bound = navigator.get_start_bound();
-    assert_eq!(start_bound, VersePosition::new(2, 1));
-    navigator.reset_position(start_bound).expect("Should reset to (2,1)");
+    assert_eq!(start_bound, VersePosition::new(114, 1));
+    navigator.reset_position(start_bound).expect("Should reset to (114,1)");
 
     loop {
         let verse = navigator.next_verse();
@@ -777,10 +778,10 @@ fn test_excluding_mode_get_bounds() {
         println!("{verse}");
     }
 
-    // end_bound = end of sura containing upper_bound
+    // end_bound = (1, 7) - last verse of first sura (Al-Fatiha)
     let end_bound = navigator.get_end_bound();
-    let sura_78_info = metadata.get_sura_info(78).expect("Sura 78 should exist");
-    assert_eq!(end_bound, VersePosition::new(78, sura_78_info.total_verses));
+    let sura_1_info = metadata.get_sura_info(1).expect("Sura 1 should exist");
+    assert_eq!(end_bound, VersePosition::new(1, sura_1_info.total_verses));
 }
 
 #[test]
@@ -845,12 +846,12 @@ fn test_get_start_and_end_bounds() {
     .upper_bound(VersePosition::new(2, 1))
     .lower_bound(VersePosition::new(2, 286));
 
-    // Should be start of sura 2
-    assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 1));
-    // Should be end of sura 2
+    // Upward starts at lower_bound (reads forward within sura, then moves to prev sura)
+    assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 286));
+    // End bound for upward with upper_bound.verse()==1: end of upper_bound's sura
     assert_eq!(navigator.get_end_bound(), VersePosition::new(2, 286));
 
-    // Test 3: Upwards with start of sura out of bounds
+    // Test 3: Upwards with partial sura bounds
     let navigator = VersesNavigator::new(
         Rc::clone(&mushaf),
         Rc::clone(&metadata),
@@ -860,9 +861,9 @@ fn test_get_start_and_end_bounds() {
     .upper_bound(VersePosition::new(2, 10))
     .lower_bound(VersePosition::new(2, 50));
 
-    // Start of sura 2 (verse 1) is out of bounds (< 10), should return upper_bound
-    assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 10));
-    // End of sura 2 (verse 286) is out of bounds (> 50), should return lower_bound
+    // Upward starts at lower_bound directly
+    assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 50));
+    // Same sura, partial range: end at lower_bound
     assert_eq!(navigator.get_end_bound(), VersePosition::new(2, 50));
 
     // Test 4: Upwards with bounds spanning multiple suras
@@ -875,9 +876,9 @@ fn test_get_start_and_end_bounds() {
     .upper_bound(VersePosition::new(1, 1))
     .lower_bound(VersePosition::new(3, 100));
 
-    // Should be start of sura 3
-    assert_eq!(navigator.get_start_bound(), VersePosition::new(3, 1));
-    // Should be end of sura 1 (verse 7)
+    // Upward starts at lower_bound (3, 100)
+    assert_eq!(navigator.get_start_bound(), VersePosition::new(3, 100));
+    // End at end of upper_bound's sura (1, 7) since upper_bound.verse() == 1
     assert_eq!(navigator.get_end_bound(), VersePosition::new(1, 7));
 
     // Test 5: Bounds consistency when switching directions
@@ -897,8 +898,8 @@ fn test_get_start_and_end_bounds() {
     // Switch to upwards
     navigator = navigator.direction(Direction::Upwards);
 
-    // Upwards: start=start of sura, end=end of sura
-    assert_eq!(navigator.get_start_bound(), VersePosition::new(5, 1));
+    // Upwards: start=lower_bound, end=lower_bound (same sura with upper.verse()==1)
+    assert_eq!(navigator.get_start_bound(), VersePosition::new(5, 120));
     assert_eq!(navigator.get_end_bound(), VersePosition::new(5, 120));
 
     // Test 6: Partial sura coverage with upwards direction
@@ -906,9 +907,9 @@ fn test_get_start_and_end_bounds() {
         .upper_bound(VersePosition::new(2, 50))
         .lower_bound(VersePosition::new(2, 100));
 
-    // Start of sura 2 (verse 1) is out of bounds (< 50), should return upper_bound
-    assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 50));
-    // End of sura 2 (verse 286) is out of bounds (> 100), should return lower_bound
+    // Upward starts at lower_bound directly
+    assert_eq!(navigator.get_start_bound(), VersePosition::new(2, 100));
+    // Same sura, partial range: end at lower_bound
     assert_eq!(navigator.get_end_bound(), VersePosition::new(2, 100));
 }
 
@@ -1283,32 +1284,166 @@ fn test_full_quran_navigation_cycle() {
 }
 #[test]
 
-fn manual_tests() {
+fn excluding_mode_tests() {
     let (mushaf, metadata) = get_mushaf();
+
+    // Excluding mode: navigate from (6,150) to (15,9)
     let mut navigator = VersesNavigator::new(
         mushaf,
         metadata,
         NavigationSettings::builder()
             .upper_bound(VersePosition::new(15, 9))
-            .lower_bound(VersePosition::new(6, 165)),
+            .lower_bound(VersePosition::new(6, 150)),
         Direction::Downwards,
     );
 
-    let mut sura = 0;
-    let mut pre = None;
-    while let Some(v) = navigator.next_verse() {
-        if sura != v.sura {
-            sura = v.sura;
-            if let Some(pre) = pre {
-                println!("{}", pre);
-            }
-            println!("{}", v);
+    let _ = navigator.reset_position(VersePosition::start());
+
+    fn is_blocked(verse: &VersePosition) -> bool {
+        // after (6,150) and before (15,9)
+        if verse.sura() > 6 && verse.sura() < 15 {
+            return true;
         }
-        if sura == 15 {
-            println!("==> {}", v);
+        if verse.sura() == 6 && verse.verse() > 150 {
+            return true;
         }
-        pre = Some(*v);
+        if verse.sura() == 15 && verse.verse() < 9 {
+            return true;
+        }
+        false
     }
 
-    let _ = navigator.reset_position(VersePosition::start());
+    let mut count = 0;
+    while let Some(v) = navigator.next_verse() {
+        assert!(!is_blocked(&v.into()));
+        count += 1;
+    }
+
+    let _ = navigator.reset_position(VersePosition::new(114, 1));
+    let mut navigator = navigator.direction(Direction::Upwards);
+
+    let mut count2 = 0;
+    while let Some(v) = navigator.next_verse() {
+        println!("{}", v);
+        assert!(!is_blocked(&v.into()));
+        count2 += 1;
+    }
+
+    assert_eq!(count, count2); // total number of verses should be the same
+    assert_eq!(&VersePosition::new(1, 7), navigator.current_verse()); // Should stop at the end of the last sura in the range
+}
+
+#[test]
+fn inclusive_mode_tests() {
+    let (mushaf, metadata) = get_mushaf();
+
+    // Inclusive mode: navigate from (6,150) to (15,9)
+
+    // Given that, x is the upper bound verse number boundary, y is the lower bound verse number boundary
+    // and z is the direction, then the following should be true:
+    // when z == Direction::Downwards, then: upper = x-end, lower = start-y
+    // when z == Direction::Upwards, then: upper = start-x, lower = y-end
+
+    // Example:
+    // Upwards: (15:9 -> 15:End) -> 14, 13, ..., (6:1 -> 6:150)
+    // Downwards: (6:150 -> 6:End) -> 7, 8, ..., (15:1 -> 15:9)
+    let mut navigator = VersesNavigator::new(
+        Rc::clone(&mushaf),
+        Rc::clone(&metadata),
+        NavigationSettings::builder()
+            .upper_bound(VersePosition::new(6, 150))
+            .lower_bound(VersePosition::new(15, 9)),
+        Direction::Downwards,
+    );
+
+    // Helper function to check if verse is within bounds for downward navigation
+    fn is_in_bounds_downward(verse: &VersePosition) -> bool {
+        // Downward: (6,150) to (15,9) inclusive
+        if verse.sura() > 6 && verse.sura() < 15 {
+            return true;
+        }
+        if verse.sura() == 6 && verse.verse() >= 150 {
+            return true;
+        }
+        if verse.sura() == 15 && verse.verse() <= 9 {
+            return true;
+        }
+        false
+    }
+
+    // Helper function to check if verse is within bounds for upward navigation
+    // Upward from (15:9) to (6:150):
+    // - Starts at 15:9, reads forward: 15:9 → 15:99
+    // - Moves to sura 14, reads all: 14:1 → 14:52
+    // - Continues through suras 13, 12, 11, 10, 9, 8, 7 (all verses)
+    // - Sura 6: reads 6:1 → 6:150 (stops at upper_bound)
+    fn is_in_bounds_upward(verse: &VersePosition) -> bool {
+        if verse.sura() < 6 || verse.sura() > 15 {
+            return false;
+        }
+        // Suras 7-14: all verses allowed
+        if verse.sura() > 6 && verse.sura() < 15 {
+            return true;
+        }
+        // Sura 15: verses 9 onwards (from lower_bound to end of sura)
+        if verse.sura() == 15 && verse.verse() >= 9 {
+            return true;
+        }
+        // Sura 6: verses 1-150 (from start to upper_bound)
+        if verse.sura() == 6 && verse.verse() <= 150 {
+            return true;
+        }
+        false
+    }
+
+    // Test downward navigation
+    let mut count_down = 0;
+    while let Some(v) = navigator.next_verse() {
+        let pos: VersePosition = v.into();
+        assert!(
+            is_in_bounds_downward(&pos),
+            "Verse {:?} is out of bounds",
+            pos
+        );
+        count_down += 1;
+    }
+
+    // Verify final position for downward navigation
+    assert_eq!(&VersePosition::new(15, 9), navigator.current_verse());
+
+    // Test upward navigation
+    let mut navigator = VersesNavigator::new(
+        mushaf,
+        metadata,
+        NavigationSettings::builder()
+            .upper_bound(VersePosition::new(6, 150))
+            .lower_bound(VersePosition::new(15, 9)),
+        Direction::Upwards,
+    );
+
+    let mut count_up = 0;
+    while let Some(v) = navigator.next_verse() {
+        let pos: VersePosition = v.into();
+        println!("{}", v);
+        assert!(
+            is_in_bounds_upward(&pos),
+            "Verse {:?} is out of bounds (upward)",
+            pos
+        );
+        count_up += 1;
+    }
+
+    // Verify final position for upward navigation
+    assert_eq!(&VersePosition::new(6, 150), navigator.current_verse());
+
+    // Note: Downward and Upward traverse DIFFERENT verse sets:
+    // - Downward: 6:150→6:165, suras 7-14, 15:1→15:9
+    // - Upward: 15:9→15:99, suras 14-7, 6:1→6:150
+    // So counts represent different totals and can't be directly compared.
+    println!(
+        "Downward count: {}, Upward count: {} (different verse sets)",
+        count_down, count_up
+    );
+    assert!(count_down > 0, "Downward should traverse some verses");
+    assert!(count_up > 0, "Upward should traverse some verses");
 }

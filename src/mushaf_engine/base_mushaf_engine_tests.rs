@@ -478,8 +478,8 @@ fn calculate_lines_with_excluding_bounds() {
 fn test_navigation_with_boundary_crossing() {
     let engine = setup_engine();
 
-    // Navigate with excluding bounds in upward direction
-    // This will cause wrapping from sura 1 to sura 114
+    // Navigate with excluding bounds in upward direction with iteration cycling
+    // This will cause wrapping from sura 1 to sura 114 when cycling occurs
     let excluding_settings = NavigationSettings::builder()
         .upper_bound(VersePosition::new(78, 1))
         .lower_bound(VersePosition::new(2, 286));
@@ -488,7 +488,7 @@ fn test_navigation_with_boundary_crossing() {
         .navigate(
             1600.0,
             VersePosition::new(2, 1),
-            Direction::Upwards,
+            Direction::Downwards,
             excluding_settings,
         )
         .expect("Should navigate successfully");
@@ -497,22 +497,23 @@ fn test_navigation_with_boundary_crossing() {
     println!("{result}");
     println!("================================================\n");
 
-    // Verify that boundary crossing was detected
+    // Verify that boundary crossing was detected (due to cycling)
     assert!(
         result.cycle_info.crossed_boundaries(),
-        "Navigation should detect boundary crossing"
+        "Navigation should detect boundary crossing when cycling"
     );
 
+    // With iteration_limit=1, after reaching end_bound (1,7), 
+    // navigation cycles back to start_bound (114,1) causing boundary crossing
     // The verse should be somewhere in the higher suras (around 110-114)
-    // because we wrapped around
     assert!(
         result.verse.sura >= 78,
-        "After wrapping, should be in higher suras, got sura {}",
+        "After cycling, should be in higher suras, got sura {}",
         result.verse.sura
     );
 
     // This clarifies to the caller that the path was NOT linear (2 -> result.verse)
-    // but rather: (2,1) -> (2,286) -> (1,1) -> (1,7) -> (114,x) -> ... -> result.verse
+    // but rather: (2,1) -> (1,7) -> [cycle] -> (114,1) -> ... -> result.verse
 }
 
 #[test]

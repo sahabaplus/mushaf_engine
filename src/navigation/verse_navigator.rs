@@ -212,26 +212,25 @@ impl VersesNavigator {
     }
     /// Helper to get the start bound based on the direction & bounds mode
     pub fn get_start_bound(&self) -> VersePosition {
-        // In excluding mode, bounds are full Quran/sura, not the configured bounds
+        // In excluding mode, bounds are full Quran, not the configured bounds
         if self.settings.bounds.is_excluding_mode() {
             match self.direction {
                 Direction::Downwards => VersePosition::start(), // (1,1)
                 Direction::Upwards => {
-                    // Start of the sura containing lower_bound
-                    self.settings.bounds.lower_bound.to_start_of_sura()
+                    // Upward navigation reads suras in reverse order (114→1),
+                    // starting at verse 1 of each sura. So start at (114, 1).
+                    VersePosition::new(114, 1)
                 }
             }
         } else {
             match self.direction {
                 Direction::Downwards => self.settings.bounds.upper_bound,
                 Direction::Upwards => {
-                    // Start sura of the lower bound (make sure it is in bounds, if not, use upper bound)
-                    let start_of_sura = self.settings.bounds.lower_bound.to_start_of_sura();
-                    if self.is_out_of_bounds(start_of_sura) {
-                        self.settings.bounds.upper_bound
-                    } else {
-                        start_of_sura
-                    }
+                    // Start at lower_bound for upward navigation.
+                    // Navigation reads forward within sura, then moves to previous suras.
+                    // E.g., for range (6:150) to (15:9), upward starts at 15:9,
+                    // reads 15:9→15:99, then 14:1→14:end, ..., ending at 6:150.
+                    self.settings.bounds.lower_bound
                 }
             }
         }
@@ -241,18 +240,19 @@ impl VersesNavigator {
     pub fn get_end_bound(&self) -> VersePosition {
         let b = self.settings.bounds;
 
-        // In excluding mode, bounds are full Quran/sura, not the configured bounds
+        // In excluding mode, bounds are full Quran, not the configured bounds
         if b.is_excluding_mode() {
             match self.direction {
                 Direction::Downwards => VersePosition::end(), // (114,6)
                 Direction::Upwards => {
-                    // End of the sura containing upper_bound
+                    // Upward navigation reads suras in reverse order (114→1),
+                    // ending at the last verse of sura 1. Sura 1 (Al-Fatiha) has 7 verses.
                     let total_verses = self
                         .quran_metadata
-                        .get_sura_info(b.upper_bound.sura())
-                        .expect("expect `sura_info` not to be None")
+                        .get_sura_info(1)
+                        .expect("expect `sura_info` not to be None for sura 1")
                         .total_verses;
-                    VersePosition::new(b.upper_bound.sura(), total_verses)
+                    VersePosition::new(1, total_verses) // (1, 7)
                 }
             }
         } else {

@@ -263,7 +263,6 @@ impl Default for NavigationSettings {
     /// - `iteration_limit`: 0 (no cycling)
     /// - `upper_bound`: (1, 1) - beginning of Al-Fatiha
     /// - `lower_bound`: (114, 6) - end of An-Nas
-    #[must_use]
     fn default() -> Self {
         Self::new(Default::default(), Default::default())
     }

@@ -1,8 +1,6 @@
 use crate::mushaf::{Mushaf, Page, Verse};
-use serde::{Deserialize, Serialize, de::Visitor};
+use serde::{Deserialize, Serialize};
 use std::rc::Rc;
-
-use super::*;
 
 pub struct KingFahadMushaf;
 impl KingFahadMushaf {

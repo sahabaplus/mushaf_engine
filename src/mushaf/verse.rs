@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 #[cfg(feature = "colored_output")]
 use colored::Colorize;
 

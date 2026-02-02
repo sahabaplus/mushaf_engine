@@ -49,6 +49,10 @@ impl Page {
     pub fn verses(&self) -> &[Verse] {
         &self.verses
     }
+
+    pub fn total_verses(&self) -> usize {
+        self.verses.len()
+    }
 }
 
 // Add Display implementation for Page

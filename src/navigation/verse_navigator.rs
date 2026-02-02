@@ -535,7 +535,6 @@ impl VersesNavigator {
     /// Each time the navigator reaches the end position and resets to start position,
     /// the iteration count is incremented.
     pub fn next_verse(&mut self) -> Option<&Verse> {
-        let pre_current_verse = *self.current_verse();
         let start_bound = self.get_start_bound();
         let end_bound = self.get_end_bound();
         let remaining_iterations =
@@ -547,7 +546,7 @@ impl VersesNavigator {
             // stop the navigation if we ran out of iterations.
             if remaining_iterations > 0 {
                 self.iteration_count += 1;
-                self.reset_position(start_bound);
+                let _ = self.reset_position(start_bound);
                 return Some(self.current_verse());
             } else {
                 return None;
@@ -642,7 +641,7 @@ impl VersesNavigator {
         if start_bound.eq(self.current_verse()) {
             if remaining_iterations > 0 {
                 self.iteration_count += 1;
-                self.reset_position(end_bound);
+                let _ = self.reset_position(end_bound);
                 return Some(self.current_verse());
             } else {
                 return None;
@@ -883,39 +882,32 @@ impl VersesNavigator {
         }
 
         let mut page_verses = self.mushaf.pages[self.current_page_idx].verses();
-        let mut remaining = index
-            + (if backward {
-                page_verses.len() - 1 - self.current_verse_idx
-            } else {
-                self.current_verse_idx
-            });
+        let mut remaining_verses = self.get_remaining_verses(index, backward, page_verses);
 
         loop {
-            if page_verses.len() > remaining {
-                // Verse is in this page
+            if page_verses.len() > remaining_verses {
                 self.current_verse_idx = {
                     if backward {
-                        page_verses.len().saturating_sub(remaining + 1)
+                        page_verses.len().saturating_sub(remaining_verses + 1)
                     } else {
-                        remaining
+                        remaining_verses
                     }
                 };
                 return Some(&page_verses[self.current_verse_idx]);
             }
 
-            remaining -= page_verses.len();
+            remaining_verses -= page_verses.len();
+            match (self.current_page_idx, backward) {
+                (0, true) => {
+                    return None;
+                }
+                (x, false) if x == self.mushaf.pages.len() - 1 => {
+                    return None;
+                }
+                _ => {}
+            }
             // Move to next page
             self.current_page_idx = {
-                match (self.current_page_idx, backward) {
-                    (0, true) => {
-                        return None;
-                    }
-                    (x, false) if x == self.mushaf.pages.len() - 1 => {
-                        return None;
-                    }
-                    _ => {}
-                }
-
                 match backward {
                     true => self.current_page_idx - 1,
                     false => self.current_page_idx + 1,
@@ -923,8 +915,14 @@ impl VersesNavigator {
             };
             page_verses = self.mushaf.pages[self.current_page_idx].verses();
         }
+    }
 
-        None
+    fn get_remaining_verses(&self, index: usize, backward: bool, page_verses: &[Verse]) -> usize {
+        if backward {
+            page_verses.len() - 1 - self.current_verse_idx + index
+        } else {
+            self.current_verse_idx + index
+        }
     }
 
     pub fn forward_index(&mut self, index: usize) -> Option<&Verse> {

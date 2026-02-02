@@ -1,4 +1,3 @@
-#![allow(unused)]
 pub mod mushaf;
 pub mod mushaf_engine;
 pub mod navigation;

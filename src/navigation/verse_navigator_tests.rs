@@ -1,11 +1,8 @@
-use super::super::*;
 use std::{path::PathBuf, rc::Rc};
-
-use colored::Colorize;
 
 use crate::{
     king_fahad_mushaf::{JsonVerse, KingFahadMushaf},
-    mushaf::{Mushaf, QuranMetadata, Verse},
+    mushaf::{Mushaf, QuranMetadata},
     navigation::{Direction, NavigationSettings, VersePosition, VersesNavigator},
 };
 
@@ -36,12 +33,12 @@ fn test_calculate_verse_with_headers_and_without_headers() {
         VersesNavigator::new(mushaf, metadata, Default::default(), Default::default())
             .ignore_sura_header(false);
     // Sura (9 - At-Tawbah) does not have a bismillah
-    navigator.reset_position(VersePosition::new(9, 1));
+    let _ = navigator.reset_position(VersePosition::new(9, 1));
     let verse = navigator.current_verse();
     let lines = navigator.calculate_verse_lines(verse);
     assert!((lines - (verse.lines + 1.0)).abs() < f32::EPSILON);
 
-    navigator.reset_position(VersePosition::new(9, 1));
+    let _ = navigator.reset_position(VersePosition::new(9, 1));
     let mut navigator = navigator.ignore_sura_header(true);
     let verse = navigator.current_verse();
     let lines = navigator.calculate_verse_lines(verse);
@@ -51,7 +48,7 @@ fn test_calculate_verse_with_headers_and_without_headers() {
     navigator = navigator.ignore_sura_header(false);
     for sura in 1..=114 {
         let header_lines = if sura == 9 { 1.0 } else { 2.0 };
-        navigator.reset_position(VersePosition::new(sura, 1));
+        let _ = navigator.reset_position(VersePosition::new(sura, 1));
         let verse = navigator.current_verse();
         let lines = navigator.calculate_verse_lines(verse);
         assert!((lines - (verse.lines + header_lines)).abs() < f32::EPSILON);
@@ -84,7 +81,7 @@ fn test_downwards_navigation() {
     let (mushaf, metadata) = get_mushaf();
     let mut navigator =
         VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
-    navigator.reset_position(VersePosition::new(5, 119));
+    let _ = navigator.reset_position(VersePosition::new(5, 119));
 
     let verse = navigator.next_verse();
     let verse = verse.expect("expect `verse` not to be None");
@@ -111,7 +108,7 @@ fn comprehensive_downwards() {
         for verse in page.verses() {
             assert_eq!(*verse, *navigator.current_verse());
 
-            navigator.next_verse_downward();
+            let _ = navigator.next_verse_downward();
         }
     }
 }
@@ -126,7 +123,7 @@ fn comprehensive_upwards() {
         Default::default(),
     );
 
-    navigator.reset_position(VersePosition::new(114, 1));
+    let _ = navigator.reset_position(VersePosition::new(114, 1));
     for i in 1..=114_u8 {
         let sura_number = 114 - i + 1;
         let sura = metadata.get_sura_info(sura_number).expect("Invalid sura number");
@@ -137,7 +134,7 @@ fn comprehensive_upwards() {
                     continue;
                 }
                 assert_eq!(*verse, *navigator.current_verse());
-                navigator.next_verse_upward();
+                let _ = navigator.next_verse_upward();
             }
         }
     }
@@ -146,10 +143,9 @@ fn comprehensive_upwards() {
 #[test]
 fn per_sura() {
     let (mushaf, metadata) = get_mushaf();
-    let pages = Rc::clone(&mushaf.pages);
     let mut navigator =
         VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
-    navigator.reset_position(VersePosition::end());
+    let _ = navigator.reset_position(VersePosition::end());
 
     let pre = navigator.move_pre_sura(navigator.current_verse().sura);
     let pre = pre.expect("expect `pre` not to be Err");
@@ -171,7 +167,7 @@ fn test_move_by_index_forward_same_page() {
         VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
     // Start at first verse of first page
-    navigator.reset_position(VersePosition::new(1, 1));
+    let _ = navigator.reset_position(VersePosition::new(1, 1));
 
     // Move forward by 2 verses within the same page
     let verse = navigator.forward_index(2);
@@ -199,7 +195,7 @@ fn test_move_by_index_backward_same_page() {
         Default::default(),
     );
     // Start at 4th verse of first page
-    navigator.reset_position(VersePosition::new(1, 4));
+    let _ = navigator.reset_position(VersePosition::new(1, 4));
 
     // Move backward by 2 verses within the same page
     let verse = navigator.backward_index(2);
@@ -227,7 +223,7 @@ fn test_move_by_index_forward_cross_page() {
     );
 
     // Start at first verse of first page
-    navigator.reset_position(VersePosition::new(1, 1));
+    let _ = navigator.reset_position(VersePosition::new(1, 1));
 
     // Get the number of verses in the first page
     let first_page_verses = mushaf.pages[0].verses();
@@ -248,7 +244,7 @@ fn test_move_by_index_backward_cross_page() {
     );
 
     // Start at a verse in the second page
-    navigator.reset_position(VersePosition::new(2, 1));
+    let _ = navigator.reset_position(VersePosition::new(2, 1));
 
     // Get the number of verses in the first page
     let first_page_verses = mushaf.pages[0].verses();
@@ -265,7 +261,7 @@ fn test_move_by_index_zero_index() {
     let mut navigator =
         VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
-    navigator.reset_position(VersePosition::new(1, 1));
+    let _ = navigator.reset_position(VersePosition::new(1, 1));
 
     // Move by 0 index should return None
     let verse = navigator.forward_index(0).copied();
@@ -289,13 +285,13 @@ fn test_move_by_index_large_index() {
     let mut navigator =
         VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
-    navigator.reset_position(VersePosition::new(1, 1));
+    let _ = navigator.reset_position(VersePosition::new(1, 1));
 
     // Try to move by a very large index that exceeds all available verses
     let verse = navigator.forward_index(100000);
     assert!(verse.is_none());
 
-    navigator.reset_position(VersePosition::new(1, 1));
+    let _ = navigator.reset_position(VersePosition::new(1, 1));
     let verse = navigator.backward_index(100000);
     assert!(verse.is_none());
 }
@@ -315,7 +311,7 @@ fn test_move_by_index_at_page_boundaries() {
     let last_verse_idx = first_page_verses.len() - 1;
     let last_verse = &first_page_verses[last_verse_idx];
 
-    navigator.reset_position(VersePosition::new(last_verse.sura, last_verse.number));
+    let _ = navigator.reset_position(VersePosition::new(last_verse.sura, last_verse.number));
 
     // Move forward by 1 should go to next page
     let verse = navigator.forward_index(1);
@@ -325,7 +321,7 @@ fn test_move_by_index_at_page_boundaries() {
     assert!(mushaf.pages[1].verses().contains(verse));
 
     // Test at the first verse of a page
-    navigator.reset_position(VersePosition::new(2, 1));
+    let _ = navigator.reset_position(VersePosition::new(2, 1));
 
     // Move backward by 1 should go to previous page
     let verse = navigator.backward_index(1);
@@ -345,7 +341,7 @@ fn test_move_by_index_consistency_with_sequential_navigation() {
         Default::default(),
     );
 
-    navigator.reset_position(VersePosition::new(1, 1));
+    let _ = navigator.reset_position(VersePosition::new(1, 1));
 
     // Move forward by 3 using index navigation
     let verse_by_index = navigator.forward_index(3).copied();
@@ -353,7 +349,7 @@ fn test_move_by_index_consistency_with_sequential_navigation() {
     let verse_by_index = verse_by_index.expect("expect `verse_by_index` not to be None");
 
     // Reset and move forward 3 times using sequential navigation
-    navigator.reset_position(VersePosition::new(1, 1));
+    let _ = navigator.reset_position(VersePosition::new(1, 1));
     let mut verse_by_sequential = navigator.current_verse();
     for _ in 0..3 {
         verse_by_sequential =
@@ -377,7 +373,7 @@ fn test_move_by_index_with_different_directions() {
         Direction::Upwards,
     );
 
-    navigator_up.reset_position(VersePosition::new(2, 5));
+    let _ = navigator_up.reset_position(VersePosition::new(2, 5));
     let verse_up = navigator_up.forward_index(3);
     assert!(verse_up.is_some());
 
@@ -385,7 +381,7 @@ fn test_move_by_index_with_different_directions() {
     let mut navigator_down =
         VersesNavigator::new(mushaf, metadata, Default::default(), Direction::Downwards);
 
-    navigator_down.reset_position(VersePosition::new(2, 5));
+    let _ = navigator_down.reset_position(VersePosition::new(2, 5));
     let verse_down = navigator_down.forward_index(3);
     assert!(verse_down.is_some());
 
@@ -441,15 +437,15 @@ fn test_reset_position() {
     let (mushaf, metadata) = get_mushaf();
     let mut navigator =
         VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
-    navigator.reset_position(VersePosition::new(2, 1));
+    let _ = navigator.reset_position(VersePosition::new(2, 1));
     assert_eq!(navigator.current_verse().sura, 2);
     assert_eq!(navigator.current_verse().number, 1);
 
-    navigator.reset_position(VersePosition::new(2, 286));
+    let _ = navigator.reset_position(VersePosition::new(2, 286));
     assert_eq!(navigator.current_verse().sura, 2);
     assert_eq!(navigator.current_verse().number, 286);
 
-    navigator.reset_position(VersePosition::end());
+    let _ = navigator.reset_position(VersePosition::end());
     assert_eq!(navigator.current_verse().sura, 114);
     assert_eq!(navigator.current_verse().number, 6);
 }
@@ -475,13 +471,13 @@ fn test_multiple_iterations() {
             .upper_bound(VersePosition::new(2, 1))
             .lower_bound(VersePosition::new(2, 286))
             .iteration_limit(1);
-    navigator.reset_position(VersePosition::new(2, 1));
+    let _ = navigator.reset_position(VersePosition::new(2, 1));
 
     let sura_2_lines = {
         let (mushaf, metadata) = get_mushaf();
         let mut nav =
             VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
-        nav.reset_position(VersePosition::new(2, 1));
+        let _ = nav.reset_position(VersePosition::new(2, 1));
         let mut lines = 0.0;
         println!("===== Start of `sura_2_lines` =====");
         loop {
@@ -1276,18 +1272,13 @@ fn test_full_quran_navigation_cycle() {
         Direction::Downwards,
     );
 
-    navigator.reset_position(VersePosition::start());
-    let stdout = std::io::stdout();
-    use std::io::Write;
-    let mut writer = stdout.lock();
+    let _ = navigator.reset_position(VersePosition::start());
 
-    let mut c = 0;
-
-    while let Some(v) = navigator.next_verse() {}
+    while navigator.next_verse().is_some() {}
 
     assert_eq!(&VersePosition::end(), navigator.current_verse());
 
-    while let Some(v) = navigator.previous_verse() {}
+    while navigator.previous_verse().is_some() {}
     assert_eq!(&VersePosition::start(), navigator.current_verse());
 }
 #[test]
@@ -1304,7 +1295,6 @@ fn manual_tests() {
     );
 
     let mut sura = 0;
-    use crate::mushaf::Verse;
     let mut pre = None;
     while let Some(v) = navigator.next_verse() {
         if sura != v.sura {
@@ -1320,5 +1310,5 @@ fn manual_tests() {
         pre = Some(*v);
     }
 
-    navigator.reset_position(VersePosition::start());
+    let _ = navigator.reset_position(VersePosition::start());
 }

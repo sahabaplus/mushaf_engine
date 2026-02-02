@@ -272,7 +272,7 @@ impl IMushafEngine for BaseMushafEngine {
             return Err(CalculatingLinesError::WrongBoundary);
         }
 
-        let (start_verse_data, ..) = self
+        let _ = self
             .navigator
             .find_verse(start)
             .map_err(|_| CalculatingLinesError::WrongBoundary)?;
@@ -283,7 +283,7 @@ impl IMushafEngine for BaseMushafEngine {
 
         // Calculate direct distance from start to end
         let mut navigator = self.create_navigator(settings, direction);
-        navigator.reset_position(start);
+        let _ = navigator.reset_position(start);
 
         let mut direct_lines = 0.0;
         loop {
@@ -311,7 +311,7 @@ impl IMushafEngine for BaseMushafEngine {
         settings: NavigationSettings,
     ) -> Option<Verse> {
         let mut navigator = self.create_navigator(settings, direction);
-        navigator.reset_position(from);
+        let _ = navigator.reset_position(from);
         navigator.next_verse().copied()
     }
 
@@ -322,7 +322,7 @@ impl IMushafEngine for BaseMushafEngine {
         settings: NavigationSettings,
     ) -> Option<Verse> {
         let mut navigator = self.create_navigator(settings, direction);
-        navigator.reset_position(from);
+        let _ = navigator.reset_position(from);
         navigator.previous_verse().copied()
     }
 }

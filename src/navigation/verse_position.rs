@@ -1,4 +1,4 @@
-use crate::{mushaf::Verse, navigation::LookupError};
+use crate::mushaf::Verse;
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct VersePosition(u8, u16);
 
@@ -46,7 +46,6 @@ impl VersePosition {
 }
 
 impl Default for VersePosition {
-    #[must_use]
     fn default() -> Self {
         Self(1, 1)
     }

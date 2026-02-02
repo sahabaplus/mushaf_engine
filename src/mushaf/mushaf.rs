@@ -58,14 +58,14 @@ impl Display for Mushaf {
         // Display summary info with colors if enabled
         #[cfg(feature = "colored_output")]
         {
-            write!(f, "{}", "=== Mushaf Summary ===\n".bright_green().bold());
-            writeln!(
+            let _ = write!(f, "{}", "=== Mushaf Summary ===\n".bright_green().bold());
+            let _ = writeln!(
                 f,
                 "{}: {}",
                 "Total Pages".yellow(),
                 self.max_page.to_string().cyan()
             );
-            writeln!(
+            let _ = writeln!(
                 f,
                 "{}: {}",
                 "Lines per Page".yellow(),

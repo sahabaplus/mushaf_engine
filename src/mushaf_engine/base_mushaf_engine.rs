@@ -325,6 +325,40 @@ impl IMushafEngine for BaseMushafEngine {
         let _ = navigator.reset_position(from);
         navigator.previous_verse().copied()
     }
+
+    fn is_out_of_bounds(
+        &self,
+        verse: impl Into<VersePosition>,
+        settings: NavigationSettings,
+    ) -> bool {
+        let navigator = self.create_navigator(settings, Direction::Downwards);
+        navigator.is_out_of_bounds(verse.into())
+    }
+
+    fn get_start_bound(
+        &self,
+        direction: Direction,
+        settings: NavigationSettings,
+    ) -> VersePosition {
+        let navigator = self.create_navigator(settings, direction);
+        navigator.get_start_bound()
+    }
+
+    fn get_end_bound(
+        &self,
+        direction: Direction,
+        settings: NavigationSettings,
+    ) -> VersePosition {
+        let navigator = self.create_navigator(settings, direction);
+        navigator.get_end_bound()
+    }
+
+    fn find_verse(&self, position: impl Into<VersePosition>) -> Option<Verse> {
+        self.navigator
+            .find_verse(position)
+            .ok()
+            .map(|(verse, ..)| *verse)
+    }
 }
 
 #[cfg(test)]

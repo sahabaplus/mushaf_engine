@@ -86,7 +86,8 @@ pub trait IMushafEngine {
         settings: NavigationSettings,
     ) -> Result<f32, CalculatingLinesError>;
 
-    /// Find the next verse from a given verse in the specified direction
+    /// Find the next verse from a given verse in the specified direction.
+    /// Respects navigation bounds and iteration limits.
     ///
     /// # Arguments
     /// * `after` - Verse position to start from
@@ -102,7 +103,8 @@ pub trait IMushafEngine {
         settings: NavigationSettings,
     ) -> Option<Verse>;
 
-    /// Find the previous verse from a given verse in the specified direction
+    /// Find the previous verse from a given verse in the specified direction.
+    /// Respects navigation bounds and iteration limits.
     ///
     /// # Arguments
     /// * `from` - Verse position to start from
@@ -117,4 +119,58 @@ pub trait IMushafEngine {
         direction: Direction,
         settings: NavigationSettings,
     ) -> Option<Verse>;
+
+    /// Check if a verse position is out of the current navigation bounds.
+    ///
+    /// Uses the same rules as navigation: the verse must exist in the mushaf,
+    /// then is checked against upper/lower bounds and excluding mode.
+    ///
+    /// # Arguments
+    /// * `verse` - Verse position to check
+    /// * `settings` - Navigation settings (bounds and excluding mode)
+    ///
+    /// # Returns
+    /// `true` if the verse is outside the current bounds
+    fn is_out_of_bounds(
+        &self,
+        verse: impl Into<VersePosition>,
+        settings: NavigationSettings,
+    ) -> bool;
+
+    /// Get the effective start of the navigation range for the given direction and settings.
+    ///
+    /// # Arguments
+    /// * `direction` - Navigation direction
+    /// * `settings` - Navigation settings
+    ///
+    /// # Returns
+    /// The verse position where the range starts
+    fn get_start_bound(
+        &self,
+        direction: Direction,
+        settings: NavigationSettings,
+    ) -> VersePosition;
+
+    /// Get the effective end of the navigation range for the given direction and settings.
+    ///
+    /// # Arguments
+    /// * `direction` - Navigation direction
+    /// * `settings` - Navigation settings
+    ///
+    /// # Returns
+    /// The verse position where the range ends
+    fn get_end_bound(
+        &self,
+        direction: Direction,
+        settings: NavigationSettings,
+    ) -> VersePosition;
+
+    /// Resolve a (sura, verse) position to the full Verse object in the mushaf.
+    ///
+    /// # Arguments
+    /// * `position` - Verse position to look up
+    ///
+    /// # Returns
+    /// The verse with lines etc., or None if not in the mushaf
+    fn find_verse(&self, position: impl Into<VersePosition>) -> Option<Verse>;
 }

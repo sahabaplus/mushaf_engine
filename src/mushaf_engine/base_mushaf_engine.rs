@@ -175,24 +175,6 @@ impl IMushafEngine for BaseMushafEngine {
                 break;
             }
 
-            // Check for boundary crossing via boundaries
-            // Detect when we hit either the upper or lower bound of the configured range.
-            // This helps track boundary crossings in both inclusive and excluding modes.
-            if has_moved {
-                match direction {
-                    Direction::Upwards => {
-                        if settings.bounds.upper_bound() == *current_verse {
-                            crossed_boundaries = true;
-                        }
-                    }
-                    Direction::Downwards => {
-                        if settings.bounds.lower_bound() == *current_verse {
-                            crossed_boundaries = true;
-                        }
-                    }
-                }
-            }
-
             // Track cycles: count passes through the initial verse (after at least one move)
             // Note: When a cycle is detected, we continue the loop and count this verse's lines
             // This ensures consistency with calculate_lines cycle distance calculation
@@ -203,7 +185,6 @@ impl IMushafEngine for BaseMushafEngine {
                     cycle_distance = lines_in_current_cycle;
                 }
                 lines_in_current_cycle = 0.0; // Reset for next cycle
-                crossed_boundaries = true;
             }
 
             let current_sura_info = self
@@ -234,7 +215,13 @@ impl IMushafEngine for BaseMushafEngine {
             previous_verse = *current_verse;
 
             if remaining_lines > f32::EPSILON {
-                navigator.next_verse();
+                // Check return value - break if boundary reached
+                if navigator.next_verse().is_none() {
+                    break;
+                }
+                if navigator.crossed_boundaries {
+                    crossed_boundaries = true;
+                }
                 has_moved = true;
             } else {
                 break;

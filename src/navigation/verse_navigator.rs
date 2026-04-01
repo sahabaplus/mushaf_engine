@@ -88,6 +88,7 @@ use super::Direction;
 ///
 /// ## Use `ignore_sura_header: false` when:
 /// - **Page layout calculations**: Page lines end up having 15 lines wither containing headers of suras or normal full page of verses
+#[derive(Debug, Clone)]
 pub struct VersesNavigator {
     mushaf: Rc<Mushaf>,
     quran_metadata: Rc<QuranMetadata>,
@@ -101,6 +102,11 @@ pub struct VersesNavigator {
     /// have been completed. It's incremented each time the navigator
     /// reaches the end_position and resets to start_position.
     pub iteration_count: u32,
+    /// Set to `true` when `next_verse()` or `previous_verse()` wraps from
+    /// end_bound back to start_bound (or vice-versa). Reset to `false`
+    /// on the next call. Callers can read this after each call to detect
+    /// that a boundary wrap just occurred.
+    pub crossed_boundaries: bool,
 }
 
 impl VersesNavigator {
@@ -146,6 +152,7 @@ impl VersesNavigator {
             direction,
             settings,
             iteration_count: 0,
+            crossed_boundaries: false,
         };
 
         s.reset_position(s.get_start_bound())
@@ -418,18 +425,73 @@ impl VersesNavigator {
             return true;
         }
 
+        // Check if bounds span the entire Quran (default bounds case)
+        // In this case, treat all verses as in bounds regardless of direction
+        let is_full_quran = upper_bound.sura() == 1 && lower_bound.sura() == 114;
+        if is_full_quran {
+            return false;
+        }
+
         // Verse sura in the bounds
 
         // If both bounds are in the same sura, check both conditions
         if upper_bound.sura() == lower_bound.sura() && verse_sura == upper_bound.sura() {
-            return verse_number < upper_bound.verse() || verse_number > lower_bound.verse();
+            // Check if upper_bound.verse() exceeds sura length
+            if let Ok(sura_info) = self.quran_metadata.get_sura_info(verse_sura) {
+                let upper_verse = if upper_bound.verse() > sura_info.total_verses {
+                    // Upper bound exceeds sura length, so entire sura is in bounds
+                    sura_info.total_verses
+                } else {
+                    upper_bound.verse()
+                };
+                return verse_number < upper_verse || verse_number > lower_bound.verse();
+            }
         }
 
         if verse_sura == upper_bound.sura() {
-            return verse_number < upper_bound.verse();
+            // Check if upper_bound.verse() exceeds sura length
+            if let Ok(sura_info) = self.quran_metadata.get_sura_info(verse_sura)
+                && upper_bound.verse() > sura_info.total_verses {
+                    // Upper bound exceeds sura length, so all verses in this sura are in bounds
+                    return false;
+                }
+            // Direction-aware bounds for upper_bound sura:
+            // - Downward: verses < upper_bound.verse() are out of bounds
+            // - Upward: verses > upper_bound.verse() are out of bounds
+            //   Special case: when upper_bound.verse() == 1, include entire sura
+            match self.direction {
+                Direction::Downwards => return verse_number < upper_bound.verse(),
+                Direction::Upwards => {
+                    if upper_bound.verse() == 1 {
+                        // When upper_bound starts at verse 1, include entire sura
+                        return false;
+                    }
+                    return verse_number > upper_bound.verse();
+                }
+            }
         }
         if verse_sura == lower_bound.sura() {
-            return verse_number > lower_bound.verse();
+            // Direction-aware bounds for lower_bound sura:
+            // - Downward: verses > lower_bound.verse() are out of bounds
+            //   Special case: when lower_bound.verse() == sura's last verse, include entire sura
+            // - Upward: verses < lower_bound.verse() are out of bounds
+            //   Special case: when navigating upward, include entire lower_bound sura as starting range
+            match self.direction {
+                Direction::Downwards => {
+                    // Check if lower_bound is at the last verse of the sura
+                    if let Ok(sura_info) = self.quran_metadata.get_sura_info(verse_sura)
+                        && lower_bound.verse() >= sura_info.total_verses {
+                            // When lower_bound is at or beyond last verse, include entire sura
+                            return false;
+                        }
+                    return verse_number > lower_bound.verse();
+                }
+                Direction::Upwards => {
+                    // For upward navigation, allow starting from anywhere in the lower_bound sura
+                    // The actual navigation will start from the specified position and move upward
+                    return false;
+                }
+            }
         }
         false
     }
@@ -535,6 +597,7 @@ impl VersesNavigator {
     /// Each time the navigator reaches the end position and resets to start position,
     /// the iteration count is incremented.
     pub fn next_verse(&mut self) -> Option<&Verse> {
+        self.crossed_boundaries = false;
         let start_bound = self.get_start_bound();
         let end_bound = self.get_end_bound();
         let remaining_iterations =
@@ -546,6 +609,7 @@ impl VersesNavigator {
             // stop the navigation if we ran out of iterations.
             if remaining_iterations > 0 {
                 self.iteration_count += 1;
+                self.crossed_boundaries = true;
                 let _ = self.reset_position(start_bound);
                 return Some(self.current_verse());
             } else {
@@ -554,14 +618,23 @@ impl VersesNavigator {
         }
 
         // Try to get the next verse
+        let previous_position: VersePosition = self.current_verse().into();
         let has_verse = match self.direction {
             Direction::Downwards => self.next_verse_downward().is_ok(),
             Direction::Upwards => self.next_verse_upward().is_ok(),
         };
 
         if has_verse {
-            // In excluding mode, skip over excluded verses
-            if self.settings.bounds.is_excluding_mode() {
+            // Check bounds after moving
+            if !self.settings.bounds.is_excluding_mode() {
+                // Inclusive mode: check if we moved out of bounds
+                if self.is_out_of_bounds(self.current_verse().into()) {
+                    // Roll back to previous position and return None
+                    let _ = self.reset_position(previous_position);
+                    return None;
+                }
+            } else {
+                // Excluding mode: skip over excluded verses
                 loop {
                     let current = self.current_verse();
 
@@ -632,6 +705,7 @@ impl VersesNavigator {
     /// }
     /// ```
     pub fn previous_verse(&mut self) -> Option<&Verse> {
+        self.crossed_boundaries = false;
         let start_bound = self.get_start_bound();
         let end_bound = self.get_end_bound();
         let remaining_iterations =
@@ -641,6 +715,7 @@ impl VersesNavigator {
         if start_bound.eq(self.current_verse()) {
             if remaining_iterations > 0 {
                 self.iteration_count += 1;
+                self.crossed_boundaries = true;
                 let _ = self.reset_position(end_bound);
                 return Some(self.current_verse());
             } else {
@@ -649,14 +724,23 @@ impl VersesNavigator {
         }
 
         // Move to previous verse based on direction
+        let previous_position: VersePosition = self.current_verse().into();
         let has_verse = match self.direction {
             Direction::Downwards => self.prev_verse_downward().is_ok(),
             Direction::Upwards => self.prev_verse_upward().is_ok(),
         };
 
         if has_verse {
-            // In excluding mode, skip over excluded verses
-            if self.settings.bounds.is_excluding_mode() {
+            // Check bounds after moving
+            if !self.settings.bounds.is_excluding_mode() {
+                // Inclusive mode: check if we moved out of bounds
+                if self.is_out_of_bounds(self.current_verse().into()) {
+                    // Roll back to previous position and return None
+                    let _ = self.reset_position(previous_position);
+                    return None;
+                }
+            } else {
+                // Excluding mode: skip over excluded verses
                 loop {
                     let current = self.current_verse();
 

@@ -497,23 +497,290 @@ fn test_navigation_with_boundary_crossing() {
     println!("{result}");
     println!("================================================\n");
 
-    // Verify that boundary crossing was detected (due to cycling)
+    // With excluding bounds and no iteration_limit, navigation skips the excluded range
+    // but doesn't cycle back to the start, so crossed_boundaries should be false.
+    // Per the new semantics, crossed_boundaries is only true when cycling (wrapping around
+    // and returning to or passing through the initial verse), not when simply skipping
+    // an excluded range.
     assert!(
-        result.cycle_info.crossed_boundaries(),
-        "Navigation should detect boundary crossing when cycling"
+        !result.cycle_info.crossed_boundaries(),
+        "Navigation should not have crossed_boundaries without cycling"
     );
 
-    // With iteration_limit=1, after reaching end_bound (1,7), 
-    // navigation cycles back to start_bound (114,1) causing boundary crossing
-    // The verse should be somewhere in the higher suras (around 110-114)
+    // The verse should be somewhere in the higher suras (78-114) after skipping excluded range
     assert!(
         result.verse.sura >= 78,
-        "After cycling, should be in higher suras, got sura {}",
+        "After skipping excluded range, should be in higher suras, got sura {}",
         result.verse.sura
     );
+}
 
-    // This clarifies to the caller that the path was NOT linear (2 -> result.verse)
-    // but rather: (2,1) -> (1,7) -> [cycle] -> (114,1) -> ... -> result.verse
+// ==================== crossed_boundaries tests ====================
+//
+// crossed_boundaries is ONLY true when navigation wraps from end_bound
+// back to start_bound (via iteration cycling). It is NOT true when:
+// - Navigation simply reaches the end and stops
+// - Navigation skips an excluded range
+// - Navigation runs out of lines mid-range
+
+#[test]
+fn test_crossed_boundaries_false_when_stopping_at_end_downwards() {
+    let engine = setup_engine();
+
+    // Navigate within a bounded range without iteration_limit.
+    // Navigation should stop at end_bound, NOT set crossed_boundaries.
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(1, 1))
+        .lower_bound(VersePosition::new(1, 7));
+
+    let result = engine
+        .navigate(
+            1000.0, // More than enough to reach end
+            VersePosition::new(1, 1),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("Should navigate successfully");
+
+    assert_eq!(VersePosition::new(1, 7), result.verse);
+    assert!(
+        !result.cycle_info.crossed_boundaries(),
+        "Stopping at end_bound should NOT set crossed_boundaries"
+    );
+    assert_eq!(result.cycle_info.cycles_completed(), 0);
+}
+
+#[test]
+fn test_crossed_boundaries_false_when_stopping_at_end_upwards() {
+    let engine = setup_engine();
+
+    // Upward navigation with bounds, no cycling. Should stop at upper_bound sura.
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(112, 1))
+        .lower_bound(VersePosition::new(114, 6));
+
+    let result = engine
+        .navigate(
+            1000.0, // More than enough to reach end
+            VersePosition::new(114, 1),
+            Direction::Upwards,
+            settings,
+        )
+        .expect("Should navigate successfully");
+
+    assert_eq!(result.verse.sura, 112);
+    assert!(
+        !result.cycle_info.crossed_boundaries(),
+        "Stopping at end_bound (upwards) should NOT set crossed_boundaries"
+    );
+    assert_eq!(result.cycle_info.cycles_completed(), 0);
+}
+
+#[test]
+fn test_crossed_boundaries_false_when_lines_run_out() {
+    let engine = setup_engine();
+
+    // Navigate a small number of lines — not enough to reach the end.
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(1, 1))
+        .lower_bound(VersePosition::new(10, 109));
+
+    let result = engine
+        .navigate(
+            5.0,
+            VersePosition::new(1, 1),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("Should navigate successfully");
+
+    assert!(
+        !result.cycle_info.crossed_boundaries(),
+        "Running out of lines mid-range should NOT set crossed_boundaries"
+    );
+    assert_eq!(result.cycle_info.cycles_completed(), 0);
+}
+
+#[test]
+fn test_crossed_boundaries_true_when_cycling_downwards() {
+    let engine = setup_engine();
+
+    // Bounded range with iteration_limit allowing cycling.
+    // Navigation MUST wrap from end_bound back to start_bound.
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(1, 1))
+        .lower_bound(VersePosition::new(1, 7))
+        .iteration_limit(2);
+
+    let result = engine
+        .navigate(
+            100.0, // Enough to cycle through Al-Fatiha multiple times
+            VersePosition::new(1, 1),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("Should navigate successfully");
+
+    assert!(
+        result.cycle_info.cycles_completed() > 0,
+        "Should have completed at least one cycle"
+    );
+    assert!(
+        result.cycle_info.crossed_boundaries(),
+        "Wrapping from end_bound to start_bound MUST set crossed_boundaries"
+    );
+}
+
+#[test]
+fn test_crossed_boundaries_true_when_cycling_upwards() {
+    let engine = setup_engine();
+
+    // Upward navigation with cycling through a small sura range.
+    // Start from (114, 6) — the start_bound for upward direction.
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(112, 1))
+        .lower_bound(VersePosition::new(114, 6))
+        .iteration_limit(2);
+
+    let result = engine
+        .navigate(
+            100.0, // Enough to cycle
+            VersePosition::new(114, 6),
+            Direction::Upwards,
+            settings,
+        )
+        .expect("Should navigate successfully");
+
+    assert!(
+        result.cycle_info.cycles_completed() > 0,
+        "Should have completed at least one cycle"
+    );
+    assert!(
+        result.cycle_info.crossed_boundaries(),
+        "Wrapping from end_bound to start_bound (upwards) MUST set crossed_boundaries"
+    );
+}
+
+#[test]
+fn test_crossed_boundaries_false_with_excluding_bounds() {
+    let engine = setup_engine();
+
+    // Excluding bounds: skip a range but do NOT cycle.
+    // crossed_boundaries should remain false.
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(2, 20))
+        .lower_bound(VersePosition::new(2, 10));
+
+    let result = engine
+        .navigate(
+            30.0,
+            VersePosition::new(2, 1),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("Should navigate successfully");
+
+    assert!(
+        !result.cycle_info.crossed_boundaries(),
+        "Skipping an excluded range should NOT set crossed_boundaries"
+    );
+}
+
+#[test]
+fn test_crossed_boundaries_false_full_quran_no_cycle() {
+    let engine = setup_engine();
+
+    // Full Quran bounds, no iteration. Navigate a small distance.
+    let result = engine
+        .navigate(
+            30.0,
+            VersePosition::new(50, 1),
+            Direction::Downwards,
+            Default::default(),
+        )
+        .expect("Should navigate successfully");
+
+    assert!(
+        !result.cycle_info.crossed_boundaries(),
+        "Normal navigation through full Quran should NOT set crossed_boundaries"
+    );
+    assert_eq!(result.cycle_info.cycles_completed(), 0);
+}
+
+#[test]
+fn test_crossed_boundaries_exactly_at_end_no_cross() {
+    let engine = setup_engine();
+
+    // Navigate exactly to the end_bound. No cycling should occur.
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(1, 1))
+        .lower_bound(VersePosition::new(1, 7));
+
+    // Calculate exact lines for the range
+    let exact_lines = engine
+        .calculate_lines(
+            VersePosition::new(1, 1),
+            VersePosition::new(1, 7),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("Should calculate lines");
+
+    let result = engine
+        .navigate(
+            exact_lines,
+            VersePosition::new(1, 1),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("Should navigate successfully");
+
+    assert_eq!(VersePosition::new(1, 7), result.verse);
+    assert!(
+        !result.cycle_info.crossed_boundaries(),
+        "Landing exactly on end_bound should NOT set crossed_boundaries"
+    );
+    assert_eq!(result.cycle_info.cycles_completed(), 0);
+}
+
+#[test]
+fn test_crossed_boundaries_single_cycle_then_stop() {
+    let engine = setup_engine();
+
+    // iteration_limit=1: one wrap, then stop at end.
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(1, 1))
+        .lower_bound(VersePosition::new(1, 7))
+        .iteration_limit(1);
+
+    // Calculate exact lines for one full cycle (end_bound → start_bound → end_bound)
+    let cycle_lines = engine
+        .calculate_lines(
+            VersePosition::new(1, 1),
+            VersePosition::new(1, 7),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("Should calculate lines");
+
+    // Navigate slightly more than one cycle to force wrapping
+    let result = engine
+        .navigate(
+            cycle_lines + 1.0,
+            VersePosition::new(1, 1),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("Should navigate successfully");
+
+    assert!(
+        result.cycle_info.crossed_boundaries(),
+        "After wrapping once, crossed_boundaries MUST be true"
+    );
+    assert!(
+        result.cycle_info.cycles_completed() >= 1,
+        "Should have completed at least 1 cycle"
+    );
 }
 
 #[test]

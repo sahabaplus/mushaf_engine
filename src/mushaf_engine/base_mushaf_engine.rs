@@ -254,7 +254,8 @@ impl IMushafEngine for BaseMushafEngine {
     ) -> Result<f32, CalculatingLinesError> {
         let (start, end) = (start.into(), end.into());
         let is_wrong_direction = VersesNavigator::is_wrong_direction(start, end, direction);
-        let out_of_bounds = self.navigator.is_out_of_bounds(start);
+        let mut navigator = self.create_navigator(settings, direction);
+        let out_of_bounds = navigator.is_out_of_bounds(start);
         if is_wrong_direction && out_of_bounds {
             return Err(CalculatingLinesError::WrongBoundary);
         }
@@ -269,7 +270,6 @@ impl IMushafEngine for BaseMushafEngine {
             .map_err(|_| CalculatingLinesError::WrongBoundary)?;
 
         // Calculate direct distance from start to end
-        let mut navigator = self.create_navigator(settings, direction);
         let _ = navigator.reset_position(start);
 
         let mut direct_lines = 0.0;
@@ -316,9 +316,10 @@ impl IMushafEngine for BaseMushafEngine {
     fn is_out_of_bounds(
         &self,
         verse: impl Into<VersePosition>,
+        direction: Direction,
         settings: NavigationSettings,
     ) -> bool {
-        let navigator = self.create_navigator(settings, Direction::Downwards);
+        let navigator = self.create_navigator(settings, direction);
         navigator.is_out_of_bounds(verse.into())
     }
 

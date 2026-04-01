@@ -123,10 +123,13 @@ pub trait IMushafEngine {
     /// Check if a verse position is out of the current navigation bounds.
     ///
     /// Uses the same rules as navigation: the verse must exist in the mushaf,
-    /// then is checked against upper/lower bounds and excluding mode.
+    /// then is checked against upper/lower bounds and excluding mode. In inclusive
+    /// mode, verses on the upper/lower sura edges are interpreted using `direction`,
+    /// consistent with the navigator.
     ///
     /// # Arguments
     /// * `verse` - Verse position to check
+    /// * `direction` - Navigation direction (bounds checks at upper/lower sura edges are direction-aware)
     /// * `settings` - Navigation settings (bounds and excluding mode)
     ///
     /// # Returns
@@ -134,6 +137,7 @@ pub trait IMushafEngine {
     fn is_out_of_bounds(
         &self,
         verse: impl Into<VersePosition>,
+        direction: Direction,
         settings: NavigationSettings,
     ) -> bool;
 

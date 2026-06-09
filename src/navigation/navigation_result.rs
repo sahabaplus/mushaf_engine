@@ -149,7 +149,7 @@ impl CycleInfo {
 /// This structure contains the primary verse reached through navigation,
 /// as well as optional information about any overflow conditions or boundary
 /// verses (last verse of page or sura) encountered during navigation.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NavigationResult {
     /// Reference to the verse reached through navigation
     pub verse: Verse,

@@ -2,22 +2,22 @@ use crate::{
     mushaf::{Mushaf, QuranMetadata, SuraInfo, Verse},
     navigation::*,
 };
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::IMushafEngine;
 
 /// Basic implementation of the Mushaf navigation engine using King Fahad Mushaf
 pub struct BaseMushafEngine {
-    pub mushaf: Rc<Mushaf>,
-    pub quran_metadata: Rc<QuranMetadata>,
+    pub mushaf: Arc<Mushaf>,
+    pub quran_metadata: Arc<QuranMetadata>,
     pub navigator: VersesNavigator,
 }
 
 impl BaseMushafEngine {
     /// Create a new `BaseMushafEngine` with the given Mushaf
     #[must_use]
-    pub fn new(mushaf: Rc<Mushaf>) -> Self {
-        let quran_metadata = Rc::new(QuranMetadata::from_mushaf(&mushaf));
+    pub fn new(mushaf: Arc<Mushaf>) -> Self {
+        let quran_metadata = Arc::new(QuranMetadata::from_mushaf(&mushaf));
         let navigator = VersesNavigator::builder(mushaf.clone(), quran_metadata.clone());
         Self {
             mushaf,
@@ -323,29 +323,18 @@ impl IMushafEngine for BaseMushafEngine {
         navigator.is_out_of_bounds(verse.into())
     }
 
-    fn get_start_bound(
-        &self,
-        direction: Direction,
-        settings: NavigationSettings,
-    ) -> VersePosition {
+    fn get_start_bound(&self, direction: Direction, settings: NavigationSettings) -> VersePosition {
         let navigator = self.create_navigator(settings, direction);
         navigator.get_start_bound()
     }
 
-    fn get_end_bound(
-        &self,
-        direction: Direction,
-        settings: NavigationSettings,
-    ) -> VersePosition {
+    fn get_end_bound(&self, direction: Direction, settings: NavigationSettings) -> VersePosition {
         let navigator = self.create_navigator(settings, direction);
         navigator.get_end_bound()
     }
 
     fn find_verse(&self, position: impl Into<VersePosition>) -> Option<Verse> {
-        self.navigator
-            .find_verse(position)
-            .ok()
-            .map(|(verse, ..)| *verse)
+        self.navigator.find_verse(position).ok().map(|(verse, ..)| *verse)
     }
 }
 

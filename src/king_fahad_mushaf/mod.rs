@@ -1,6 +1,6 @@
 use crate::mushaf::{Mushaf, Page, Verse};
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub struct KingFahadMushaf;
 impl KingFahadMushaf {
@@ -58,8 +58,8 @@ impl KingFahadMushaf {
                 })
                 .collect();
 
-            // Then convert to Rc<[Verse]>
-            let verses_rc = Rc::from(verses);
+            // Then convert to Arc<[Verse]>
+            let verses_rc = Arc::from(verses);
 
             pages.push(Page::new(page_number, verses_rc));
         }
@@ -68,7 +68,7 @@ impl KingFahadMushaf {
             lines_per_page: 15,
             max_page: u16::try_from(pages.len())
                 .expect("expect `pages.len()` to be less than `u16::MAX`"),
-            pages: Rc::from(pages),
+            pages: Arc::from(pages),
         }
     }
 }

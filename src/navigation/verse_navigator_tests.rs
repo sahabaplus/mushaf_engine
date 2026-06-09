@@ -1,4 +1,4 @@
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     king_fahad_mushaf::{JsonVerse, KingFahadMushaf},
@@ -6,12 +6,12 @@ use crate::{
     navigation::{Direction, NavigationSettings, VersePosition, VersesNavigator},
 };
 
-fn get_mushaf() -> (Rc<Mushaf>, Rc<QuranMetadata>) {
+fn get_mushaf() -> (Arc<Mushaf>, Arc<QuranMetadata>) {
     let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     data_path.push("data");
     data_path.push("king_fahad_mushaf.json");
 
-    let mushaf = Rc::new({
+    let mushaf = Arc::new({
         let path = data_path.to_str().expect("expect `data_path` to be a valid string");
         // Load from provided JSON path
         let file_content = std::fs::read_to_string(path).expect("Failed to read mushaf data file");
@@ -21,7 +21,7 @@ fn get_mushaf() -> (Rc<Mushaf>, Rc<QuranMetadata>) {
 
         KingFahadMushaf::create_mushaf_from_pages(pages)
     });
-    let metadata = Rc::new(QuranMetadata::from_mushaf(&mushaf));
+    let metadata = Arc::new(QuranMetadata::from_mushaf(&mushaf));
 
     (mushaf, metadata)
 }
@@ -100,7 +100,7 @@ fn test_downwards_navigation() {
 #[test]
 fn comprehensive_downwards() {
     let (mushaf, metadata) = get_mushaf();
-    let pages = Rc::clone(&mushaf.pages);
+    let pages = Arc::clone(&mushaf.pages);
     let mut navigator =
         VersesNavigator::new(mushaf, metadata, Default::default(), Default::default());
 
@@ -115,7 +115,7 @@ fn comprehensive_downwards() {
 #[test]
 fn comprehensive_upwards() {
     let (mushaf, metadata) = get_mushaf();
-    let pages = Rc::clone(&mushaf.pages);
+    let pages = Arc::clone(&mushaf.pages);
     let mut navigator = VersesNavigator::new(
         mushaf,
         metadata.clone(),
@@ -367,8 +367,8 @@ fn test_move_by_index_with_different_directions() {
 
     // Test with Upwards direction
     let mut navigator_up = VersesNavigator::new(
-        Rc::clone(&mushaf),
-        Rc::clone(&metadata),
+        Arc::clone(&mushaf),
+        Arc::clone(&metadata),
         Default::default(),
         Direction::Upwards,
     );
@@ -754,8 +754,8 @@ fn test_excluding_mode_get_bounds() {
     let (mushaf, metadata) = get_mushaf();
     // Excluding mode: exclude verses strictly between (2,286) and (78,1)
     let mut navigator = VersesNavigator::new(
-        Rc::clone(&mushaf),
-        Rc::clone(&metadata),
+        Arc::clone(&mushaf),
+        Arc::clone(&metadata),
         Default::default(),
         Direction::Upwards,
     )
@@ -825,8 +825,8 @@ fn test_get_start_and_end_bounds() {
 
     // Test 1: Downwards direction - start_bound should be upper_bound
     let navigator = VersesNavigator::new(
-        Rc::clone(&mushaf),
-        Rc::clone(&metadata),
+        Arc::clone(&mushaf),
+        Arc::clone(&metadata),
         Default::default(),
         Direction::Downwards,
     )
@@ -838,8 +838,8 @@ fn test_get_start_and_end_bounds() {
 
     // Test 2: Upwards direction with full sura in bounds
     let navigator = VersesNavigator::new(
-        Rc::clone(&mushaf),
-        Rc::clone(&metadata),
+        Arc::clone(&mushaf),
+        Arc::clone(&metadata),
         Default::default(),
         Direction::Upwards,
     )
@@ -853,8 +853,8 @@ fn test_get_start_and_end_bounds() {
 
     // Test 3: Upwards with partial sura bounds
     let navigator = VersesNavigator::new(
-        Rc::clone(&mushaf),
-        Rc::clone(&metadata),
+        Arc::clone(&mushaf),
+        Arc::clone(&metadata),
         Default::default(),
         Direction::Upwards,
     )
@@ -868,8 +868,8 @@ fn test_get_start_and_end_bounds() {
 
     // Test 4: Upwards with bounds spanning multiple suras
     let navigator = VersesNavigator::new(
-        Rc::clone(&mushaf),
-        Rc::clone(&metadata),
+        Arc::clone(&mushaf),
+        Arc::clone(&metadata),
         Default::default(),
         Direction::Upwards,
     )
@@ -883,8 +883,8 @@ fn test_get_start_and_end_bounds() {
 
     // Test 5: Bounds consistency when switching directions
     let mut navigator = VersesNavigator::new(
-        Rc::clone(&mushaf),
-        Rc::clone(&metadata),
+        Arc::clone(&mushaf),
+        Arc::clone(&metadata),
         Default::default(),
         Direction::Downwards,
     )
@@ -1348,8 +1348,8 @@ fn inclusive_mode_tests() {
     // Upwards: (15:9 -> 15:End) -> 14, 13, ..., (6:1 -> 6:150)
     // Downwards: (6:150 -> 6:End) -> 7, 8, ..., (15:1 -> 15:9)
     let mut navigator = VersesNavigator::new(
-        Rc::clone(&mushaf),
-        Rc::clone(&metadata),
+        Arc::clone(&mushaf),
+        Arc::clone(&metadata),
         NavigationSettings::builder()
             .upper_bound(VersePosition::new(6, 150))
             .lower_bound(VersePosition::new(15, 9)),

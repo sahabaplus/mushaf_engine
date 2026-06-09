@@ -1,4 +1,4 @@
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, sync::Arc};
 
 use super::verse::Verse;
 
@@ -14,7 +14,7 @@ pub struct Page {
     /// Page number (1-indexed)
     number: u16,
     /// Collection of verses appearing on this page, stored as a reference-counted slice
-    verses: Rc<[Verse]>,
+    verses: Arc<[Verse]>,
 }
 
 impl Page {
@@ -27,7 +27,7 @@ impl Page {
     /// # Returns
     /// A new Page instance
     #[must_use]
-    pub const fn new(number: u16, verses: Rc<[Verse]>) -> Self {
+    pub const fn new(number: u16, verses: Arc<[Verse]>) -> Self {
         Self { number, verses }
     }
 

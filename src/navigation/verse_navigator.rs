@@ -2,7 +2,7 @@ use crate::{
     mushaf::{Mushaf, QuranMetadata, Verse},
     navigation::{LookupError, NavigationSettings, VersePosition},
 };
-use std::rc::Rc;
+use std::sync::Arc;
 
 use super::Direction;
 
@@ -90,8 +90,8 @@ use super::Direction;
 /// - **Page layout calculations**: Page lines end up having 15 lines wither containing headers of suras or normal full page of verses
 #[derive(Debug, Clone)]
 pub struct VersesNavigator {
-    mushaf: Rc<Mushaf>,
-    quran_metadata: Rc<QuranMetadata>,
+    mushaf: Arc<Mushaf>,
+    quran_metadata: Arc<QuranMetadata>,
     current_page_idx: usize,
     current_verse_idx: usize,
     settings: NavigationSettings,
@@ -139,8 +139,8 @@ impl VersesNavigator {
     /// ```
     #[must_use]
     pub fn new(
-        mushaf: Rc<Mushaf>,
-        metadata: Rc<QuranMetadata>,
+        mushaf: Arc<Mushaf>,
+        metadata: Arc<QuranMetadata>,
         settings: NavigationSettings,
         direction: Direction,
     ) -> Self {
@@ -180,7 +180,7 @@ impl VersesNavigator {
     ///     .direction(Direction::Upwards);
     /// ```
     #[must_use]
-    pub fn builder(mushaf: Rc<Mushaf>, metadata: Rc<QuranMetadata>) -> Self {
+    pub fn builder(mushaf: Arc<Mushaf>, metadata: Arc<QuranMetadata>) -> Self {
         Self::new(mushaf, metadata, Default::default(), Default::default())
     }
 
@@ -451,10 +451,11 @@ impl VersesNavigator {
         if verse_sura == upper_bound.sura() {
             // Check if upper_bound.verse() exceeds sura length
             if let Ok(sura_info) = self.quran_metadata.get_sura_info(verse_sura)
-                && upper_bound.verse() > sura_info.total_verses {
-                    // Upper bound exceeds sura length, so all verses in this sura are in bounds
-                    return false;
-                }
+                && upper_bound.verse() > sura_info.total_verses
+            {
+                // Upper bound exceeds sura length, so all verses in this sura are in bounds
+                return false;
+            }
             // Direction-aware bounds for upper_bound sura:
             // - Downward: verses < upper_bound.verse() are out of bounds
             // - Upward: verses > upper_bound.verse() are out of bounds
@@ -480,10 +481,11 @@ impl VersesNavigator {
                 Direction::Downwards => {
                     // Check if lower_bound is at the last verse of the sura
                     if let Ok(sura_info) = self.quran_metadata.get_sura_info(verse_sura)
-                        && lower_bound.verse() >= sura_info.total_verses {
-                            // When lower_bound is at or beyond last verse, include entire sura
-                            return false;
-                        }
+                        && lower_bound.verse() >= sura_info.total_verses
+                    {
+                        // When lower_bound is at or beyond last verse, include entire sura
+                        return false;
+                    }
                     return verse_number > lower_bound.verse();
                 }
                 Direction::Upwards => {

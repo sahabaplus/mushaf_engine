@@ -149,11 +149,7 @@ pub trait IMushafEngine {
     ///
     /// # Returns
     /// The verse position where the range starts
-    fn get_start_bound(
-        &self,
-        direction: Direction,
-        settings: NavigationSettings,
-    ) -> VersePosition;
+    fn get_start_bound(&self, direction: Direction, settings: NavigationSettings) -> VersePosition;
 
     /// Get the effective end of the navigation range for the given direction and settings.
     ///
@@ -163,11 +159,7 @@ pub trait IMushafEngine {
     ///
     /// # Returns
     /// The verse position where the range ends
-    fn get_end_bound(
-        &self,
-        direction: Direction,
-        settings: NavigationSettings,
-    ) -> VersePosition;
+    fn get_end_bound(&self, direction: Direction, settings: NavigationSettings) -> VersePosition;
 
     /// Resolve a (sura, verse) position to the full Verse object in the mushaf.
     ///

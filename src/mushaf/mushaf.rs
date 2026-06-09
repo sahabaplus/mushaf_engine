@@ -1,4 +1,4 @@
-use std::{fmt::Display, rc::Rc};
+use std::{fmt::Display, sync::Arc};
 
 #[cfg(feature = "colored_output")]
 use colored::Colorize;
@@ -16,7 +16,7 @@ pub struct Mushaf {
     /// Maximum page number in this Mushaf edition
     pub max_page: u16,
     /// Collection of all pages in the Mushaf, stored as a reference-counted slice
-    pub pages: Rc<[Page]>,
+    pub pages: Arc<[Page]>,
 }
 
 impl Mushaf {
@@ -27,7 +27,7 @@ impl Mushaf {
     /// * `max_page` - Total number of pages in this Mushaf edition
     /// * `pages` - Reference-counted slice containing all pages
     #[must_use]
-    pub const fn new(lines_per_page: u8, max_page: u16, pages: Rc<[Page]>) -> Self {
+    pub const fn new(lines_per_page: u8, max_page: u16, pages: Arc<[Page]>) -> Self {
         Self {
             lines_per_page,
             max_page,

@@ -123,14 +123,14 @@ mod test {
         mushaf_engine::{IMushafEngine, base_mushaf_engine::BaseMushafEngine},
         navigation::{Direction, VersePosition},
     };
-    use std::{path::PathBuf, rc::Rc};
+    use std::{path::PathBuf, sync::Arc};
 
     fn setup_engine() -> BaseMushafEngine {
         let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         data_path.push("data");
         data_path.push("king_fahad_mushaf.json");
 
-        let mushaf = Rc::new({
+        let mushaf = Arc::new({
             let path = data_path.to_str().expect("expect `data_path` to be a valid string");
             // Load from provided JSON path
             let file_content =

@@ -4,7 +4,7 @@ use crate::{
     navigation::*,
 };
 use colored::Colorize;
-use std::{path::PathBuf, rc::Rc};
+use std::{path::PathBuf, sync::Arc};
 
 // Test tolerance constants
 /// Tolerance for line distance comparisons in tests
@@ -21,7 +21,7 @@ fn setup_engine() -> BaseMushafEngine {
     data_path.push("data");
     data_path.push("king_fahad_mushaf.json");
 
-    let mushaf = Rc::new({
+    let mushaf = Arc::new({
         let path = data_path.to_str().expect("expect `data_path` to be a valid string");
         // Load from provided JSON path
         let file_content = std::fs::read_to_string(path).expect("Failed to read mushaf data file");

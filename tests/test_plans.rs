@@ -118,7 +118,7 @@ mod test {
         "الْفَلَقُ",
         "النَّاسُ",
     ];
-    use rust_quran_engine::{
+    use mushaf_engine::{
         king_fahad_mushaf::{JsonVerse, KingFahadMushaf},
         mushaf_engine::{IMushafEngine, base_mushaf_engine::BaseMushafEngine},
         navigation::{Direction, VersePosition},

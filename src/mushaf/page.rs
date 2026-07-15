@@ -69,10 +69,10 @@ impl std::fmt::Display for Page {
 
         #[cfg(not(feature = "colored_output"))]
         {
-            write!(f, "Page {}\n", self.number)?;
+            writeln!(f, "Page {}", self.number)?;
 
             for (i, verse) in self.verses.iter().enumerate() {
-                write!(f, "  {}. {}\n", i + 1, verse)?;
+                writeln!(f, "  {}. {}", i + 1, verse)?;
             }
         }
 

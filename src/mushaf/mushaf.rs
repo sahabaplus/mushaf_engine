@@ -58,19 +58,19 @@ impl Display for Mushaf {
         // Display summary info with colors if enabled
         #[cfg(feature = "colored_output")]
         {
-            let _ = write!(f, "{}", "=== Mushaf Summary ===\n".bright_green().bold());
-            let _ = writeln!(
+            write!(f, "{}", "=== Mushaf Summary ===\n".bright_green().bold())?;
+            writeln!(
                 f,
                 "{}: {}",
                 "Total Pages".yellow(),
                 self.max_page.to_string().cyan()
-            );
-            let _ = writeln!(
+            )?;
+            writeln!(
                 f,
                 "{}: {}",
                 "Lines per Page".yellow(),
                 self.lines_per_page.to_string().cyan()
-            );
+            )?;
             writeln!(
                 f,
                 "{}: {}",
@@ -82,12 +82,12 @@ impl Display for Mushaf {
         // Plain display when colored feature is not enabled
         #[cfg(not(feature = "colored_output"))]
         {
-            write!(f, "=== Mushaf Summary ===\n");
-            write!(f, "Total Pages: {}\n", self.max_page);
-            write!(f, "Lines per Page: {}\n", self.lines_per_page);
-            write!(
+            writeln!(f, "=== Mushaf Summary ===")?;
+            writeln!(f, "Total Pages: {}", self.max_page)?;
+            writeln!(f, "Lines per Page: {}", self.lines_per_page)?;
+            writeln!(
                 f,
-                "Total Verses: {}\n",
+                "Total Verses: {}",
                 self.pages.iter().map(|p| p.verses().len()).sum::<usize>()
             )
         }

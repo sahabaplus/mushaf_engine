@@ -60,7 +60,7 @@ impl std::fmt::Display for LastVerseResult {
             write!(
                 f,
                 "Lines distance: {}, Verse: {}",
-                self.remaining_lines, self.last_verse
+                self.lines_distance, self.last_verse
             )
         }
     }

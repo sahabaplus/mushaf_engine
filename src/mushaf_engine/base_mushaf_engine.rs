@@ -4,7 +4,16 @@ use crate::{
 };
 use std::sync::Arc;
 
-use super::IMushafEngine;
+use super::{IMushafEngine, VerseLocation};
+
+/// Whether line-based navigation steps with `next_verse` or `previous_verse`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LineStep {
+    /// Drive forward on the highway (`next_verse`).
+    Forward,
+    /// Drive backward on the same highway (`previous_verse`).
+    Reverse,
+}
 
 /// Basic implementation of the Mushaf navigation engine using King Fahad Mushaf
 pub struct BaseMushafEngine {
@@ -24,6 +33,29 @@ impl BaseMushafEngine {
             quran_metadata,
             navigator,
         }
+    }
+
+    /// Load the bundled King Fahad Mushaf JSON shipped with this crate.
+    ///
+    /// # Errors
+    /// Returns an I/O or JSON parse error if the asset cannot be read.
+    #[cfg(feature = "king_fahad_mushaf")]
+    pub fn king_fahad() -> Result<Self, std::io::Error> {
+        use crate::king_fahad_mushaf::{JsonVerse, KingFahadMushaf};
+        use std::path::PathBuf;
+
+        let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        data_path.push("data");
+        data_path.push("king_fahad_mushaf.json");
+        let path = data_path
+            .to_str()
+            .ok_or_else(|| std::io::Error::other("invalid mushaf data path"))?;
+        let file_content = std::fs::read_to_string(path)?;
+        let pages: Vec<Vec<JsonVerse>> =
+            serde_json::from_str(&file_content).map_err(std::io::Error::other)?;
+        Ok(Self::new(Arc::new(
+            KingFahadMushaf::create_mushaf_from_pages(pages),
+        )))
     }
 
     /// Get metadata about a specific Sura
@@ -120,15 +152,16 @@ impl BaseMushafEngine {
             direction,
         )
     }
-}
 
-impl IMushafEngine for BaseMushafEngine {
-    fn navigate(
+    /// Shared implementation for [`IMushafEngine::navigate`] and
+    /// [`IMushafEngine::reverse_navigate`].
+    fn navigate_by_lines(
         &self,
         lines: f32,
         from: impl Into<VersePosition>,
         direction: Direction,
         settings: NavigationSettings,
+        step: LineStep,
     ) -> Result<NavigationResult, NavigationError> {
         if lines < 0.0 {
             return Err(NavigationError::NegativeLines);
@@ -176,8 +209,6 @@ impl IMushafEngine for BaseMushafEngine {
             }
 
             // Track cycles: count passes through the initial verse (after at least one move)
-            // Note: When a cycle is detected, we continue the loop and count this verse's lines
-            // This ensures consistency with calculate_lines cycle distance calculation
             if has_moved && current_verse == &initial_verse {
                 cycles_completed += 1;
                 if cycle_distance == 0.0 {
@@ -216,7 +247,11 @@ impl IMushafEngine for BaseMushafEngine {
 
             if remaining_lines > f32::EPSILON {
                 // Check return value - break if boundary reached
-                if navigator.next_verse().is_none() {
+                let stepped = match step {
+                    LineStep::Forward => navigator.next_verse(),
+                    LineStep::Reverse => navigator.previous_verse(),
+                };
+                if stepped.is_none() {
                     break;
                 }
                 if navigator.crossed_boundaries {
@@ -239,6 +274,28 @@ impl IMushafEngine for BaseMushafEngine {
             lines - remaining_lines,
             CycleInfo::new(cycles_completed, crossed_boundaries, cycle_distance),
         ))
+    }
+}
+
+impl IMushafEngine for BaseMushafEngine {
+    fn navigate(
+        &self,
+        lines: f32,
+        from: impl Into<VersePosition>,
+        direction: Direction,
+        settings: NavigationSettings,
+    ) -> Result<NavigationResult, NavigationError> {
+        self.navigate_by_lines(lines, from, direction, settings, LineStep::Forward)
+    }
+
+    fn reverse_navigate(
+        &self,
+        lines: f32,
+        from: impl Into<VersePosition>,
+        direction: Direction,
+        settings: NavigationSettings,
+    ) -> Result<NavigationResult, NavigationError> {
+        self.navigate_by_lines(lines, from, direction, settings, LineStep::Reverse)
     }
 
     fn get_sura_info(&self, sura_number: u8) -> Result<&SuraInfo, LookupError> {
@@ -335,6 +392,35 @@ impl IMushafEngine for BaseMushafEngine {
 
     fn find_verse(&self, position: impl Into<VersePosition>) -> Option<Verse> {
         self.navigator.find_verse(position).ok().map(|(verse, ..)| *verse)
+    }
+
+    fn find_verse_location(&self, position: impl Into<VersePosition>) -> Option<VerseLocation> {
+        self.navigator
+            .find_verse(position)
+            .ok()
+            .map(|(verse, page_number, verse_index_on_page)| VerseLocation {
+                verse: *verse,
+                page_number,
+                verse_index_on_page,
+            })
+    }
+
+    fn resolve_position(&self, sura: u8, verse: u16) -> Option<Verse> {
+        self.find_verse(VersePosition::new(sura, verse))
+    }
+
+    fn calculate_verse_lines(&self, verse: &Verse, settings: NavigationSettings) -> f32 {
+        let navigator = self.create_navigator(settings, Direction::Downwards);
+        navigator.calculate_verse_lines(verse)
+    }
+
+    fn is_wrong_direction(
+        &self,
+        start: impl Into<VersePosition>,
+        end: impl Into<VersePosition>,
+        direction: Direction,
+    ) -> bool {
+        VersesNavigator::is_wrong_direction(start, end, direction)
     }
 }
 

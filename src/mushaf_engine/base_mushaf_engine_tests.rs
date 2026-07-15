@@ -1255,3 +1255,282 @@ fn test_previous_verse_comprehensive_traversal() {
         max_iterations
     );
 }
+
+// ── Reverse navigation (ported from mushaf-engine tests/reverse-navigation.test.ts) ──
+
+#[test]
+fn reverse_navigate_zero_lines_returns_start() {
+    let engine = setup_engine();
+    let from = VersePosition::new(5, 3);
+    let result = engine
+        .reverse_navigate(0.0, from, Direction::Upwards, Default::default())
+        .expect("reverse_navigate");
+    assert_eq!(result.verse.sura, 5);
+    assert_eq!(result.verse.number, 3);
+    assert_eq!(result.distance_moved, 0.0);
+}
+
+#[test]
+fn reverse_navigate_negative_lines_errors() {
+    let engine = setup_engine();
+    let err = engine
+        .reverse_navigate(
+            -1.0,
+            VersePosition::start(),
+            Direction::Downwards,
+            Default::default(),
+        )
+        .expect_err("Should error");
+    assert!(matches!(err, NavigationError::NegativeLines));
+}
+
+#[test]
+fn reverse_navigate_differs_from_navigate() {
+    let engine = setup_engine();
+    let from = VersePosition::new(2, 100);
+    let lines = 10.0;
+    let settings = NavigationSettings::default();
+
+    let forward = engine.navigate(lines, from, Direction::Downwards, settings).expect("navigate");
+    let reverse = engine
+        .reverse_navigate(lines, from, Direction::Downwards, settings)
+        .expect("reverse_navigate");
+
+    assert_eq!(forward.verse.sura, 2);
+    assert_eq!(forward.verse.number, 101);
+    assert_eq!(reverse.verse.sura, 2);
+    assert_eq!(reverse.verse.number, 96);
+}
+
+#[test]
+fn reverse_navigate_from_last_of_fatiha_both_directions() {
+    let engine = setup_engine();
+    let from = VersePosition::new(1, 7);
+    let settings = NavigationSettings::default();
+
+    let upwards = engine
+        .reverse_navigate(10.0, from, Direction::Upwards, settings)
+        .expect("upwards");
+    let downwards = engine
+        .reverse_navigate(10.0, from, Direction::Downwards, settings)
+        .expect("downwards");
+
+    assert_eq!(upwards.verse.sura, 1);
+    assert_eq!(upwards.verse.number, 1);
+    assert_eq!(downwards.verse.sura, 1);
+    assert_eq!(downwards.verse.number, 1);
+}
+
+#[test]
+fn reverse_navigate_steps_to_earlier_verses_downwards() {
+    let engine = setup_engine();
+    let result = engine
+        .reverse_navigate(
+            15.0,
+            VersePosition::new(2, 10),
+            Direction::Downwards,
+            Default::default(),
+        )
+        .expect("reverse_navigate");
+    assert_eq!(result.verse.sura, 2);
+    assert_eq!(result.verse.number, 1);
+    assert!((result.distance_moved - 14.8).abs() < 0.15);
+}
+
+#[test]
+fn reverse_navigate_cross_sura_from_78_1() {
+    let engine = setup_engine();
+    let from = VersePosition::new(78, 1);
+    let settings = NavigationSettings::default();
+
+    let upwards = engine
+        .reverse_navigate(10.0, from, Direction::Upwards, settings)
+        .expect("upwards");
+    let downwards = engine
+        .reverse_navigate(10.0, from, Direction::Downwards, settings)
+        .expect("downwards");
+
+    assert_eq!(upwards.verse.sura, 79);
+    assert_eq!(downwards.verse.sura, 77);
+}
+
+#[test]
+fn reverse_navigate_upward_from_middle_crosses_next_sura() {
+    let engine = setup_engine();
+    let result = engine
+        .reverse_navigate(
+            20.0,
+            VersePosition::new(2, 5),
+            Direction::Upwards,
+            Default::default(),
+        )
+        .expect("reverse_navigate");
+    assert_eq!(result.verse.sura, 3);
+    assert!(result.verse.number > 1);
+}
+
+#[test]
+fn reverse_then_forward_returns_to_start() {
+    let engine = setup_engine();
+    let start = VersePosition::new(2, 50);
+    let lines = 20.0;
+    let settings = NavigationSettings::default();
+
+    let after_reverse = engine
+        .reverse_navigate(lines, start, Direction::Downwards, settings)
+        .expect("reverse");
+    let after_forward = engine
+        .navigate(
+            lines,
+            VersePosition::new(after_reverse.verse.sura, after_reverse.verse.number),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("forward");
+
+    assert_eq!(after_reverse.verse.sura, 2);
+    assert_eq!(after_reverse.verse.number, 37);
+    assert_eq!(after_forward.verse.sura, 2);
+    assert_eq!(after_forward.verse.number, 50);
+}
+
+#[test]
+fn forward_then_reverse_lands_near_start() {
+    let engine = setup_engine();
+    let start = VersePosition::new(2, 50);
+    let lines = 20.0;
+    let settings = NavigationSettings::default();
+
+    let after_forward =
+        engine.navigate(lines, start, Direction::Downwards, settings).expect("forward");
+    let after_reverse = engine
+        .reverse_navigate(
+            lines,
+            VersePosition::new(after_forward.verse.sura, after_forward.verse.number),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("reverse");
+
+    assert_eq!(after_forward.verse.sura, 2);
+    assert_eq!(after_forward.verse.number, 59);
+    assert_eq!(after_reverse.verse.sura, 2);
+    assert_eq!(after_reverse.verse.number, 49);
+}
+
+#[test]
+fn reverse_navigate_respects_bounds() {
+    let engine = setup_engine();
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(2, 1))
+        .lower_bound(VersePosition::new(2, 10));
+
+    let result = engine
+        .reverse_navigate(
+            5.0,
+            VersePosition::new(2, 5),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("reverse_navigate");
+    assert_eq!(result.verse.sura, 2);
+    assert_eq!(result.verse.number, 2);
+}
+
+#[test]
+fn reverse_navigate_cycles_within_fatiha() {
+    let engine = setup_engine();
+    let settings = NavigationSettings::builder()
+        .upper_bound(VersePosition::new(1, 1))
+        .lower_bound(VersePosition::new(1, 7))
+        .iteration_limit(2);
+
+    let reverse = engine
+        .reverse_navigate(
+            32.0,
+            VersePosition::new(1, 4),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("reverse");
+    let forward = engine
+        .navigate(
+            32.0,
+            VersePosition::new(1, 4),
+            Direction::Downwards,
+            settings,
+        )
+        .expect("forward");
+
+    assert_eq!(reverse.verse.sura, 1);
+    assert_eq!(reverse.verse.number, 1);
+    assert_eq!(reverse.cycle_info.cycles_completed(), 2);
+    assert_eq!(forward.verse.sura, 1);
+    assert_eq!(forward.verse.number, 7);
+    assert_eq!(forward.cycle_info.cycles_completed(), 2);
+}
+
+#[test]
+fn reverse_navigate_ignore_sura_header_changes_destination() {
+    let engine = setup_engine();
+    let from = VersePosition::new(2, 1);
+    let lines = 5.0;
+
+    let with_header = engine
+        .reverse_navigate(lines, from, Direction::Downwards, Default::default())
+        .expect("with header");
+    let without_header = engine
+        .reverse_navigate(
+            lines,
+            from,
+            Direction::Downwards,
+            NavigationSettings::builder().ignore_sura_header(true),
+        )
+        .expect("without header");
+
+    assert_eq!(with_header.verse.sura, 1);
+    assert_eq!(with_header.verse.number, 7);
+    assert_eq!(without_header.verse.sura, 1);
+    assert_eq!(without_header.verse.number, 4);
+}
+
+#[test]
+fn reverse_navigate_fractional_at_quran_start_overflow() {
+    let engine = setup_engine();
+    let result = engine
+        .reverse_navigate(
+            0.5,
+            VersePosition::start(),
+            Direction::Downwards,
+            Default::default(),
+        )
+        .expect("reverse_navigate");
+    assert_eq!(result.verse.sura, 1);
+    assert_eq!(result.verse.number, 1);
+    assert!(result.has_overflow());
+    assert!((result.overflow_lines() - 2.3).abs() < 0.15);
+}
+
+#[test]
+fn helpers_resolve_and_wrong_direction() {
+    let engine = setup_engine();
+    let loc = engine.find_verse_location(VersePosition::new(1, 1)).expect("location");
+    assert_eq!(loc.verse.sura, 1);
+    assert_eq!(loc.verse.number, 1);
+    assert_eq!(loc.page_number, 1);
+
+    let verse = engine.resolve_position(2, 286).expect("resolve");
+    assert_eq!(verse.sura, 2);
+    assert_eq!(verse.number, 286);
+
+    assert!(engine.is_wrong_direction(
+        VersePosition::new(2, 10),
+        VersePosition::new(2, 1),
+        Direction::Downwards,
+    ));
+    assert!(!engine.is_wrong_direction(
+        VersePosition::new(2, 1),
+        VersePosition::new(2, 10),
+        Direction::Downwards,
+    ));
+}

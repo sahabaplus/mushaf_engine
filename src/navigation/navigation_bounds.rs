@@ -225,4 +225,10 @@ impl NavigationBounds {
     pub fn lower_bound(&self) -> VersePosition {
         self.lower_bound
     }
+
+    /// Get the iteration limit (builder method is also named `iteration_limit`).
+    #[must_use]
+    pub const fn get_iteration_limit(&self) -> u32 {
+        self.iteration_limit
+    }
 }

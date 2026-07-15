@@ -8,30 +8,23 @@ use crate::{
 
 use super::verse_location::VerseLocation;
 
-/// Interface for navigation within a Quran Mushaf
+/// Line-based navigation within a Quran Mushaf.
 ///
-/// This trait defines the core navigation functionality for traversing
-/// through the Quran. It allows for moving through the text by a specified
-/// number of lines in either direction from a given verse.
+/// Implemented by [`super::BaseMushafEngine`]. Prefer importing
+/// [`crate::IMushafEngine`] from the crate root.
 pub trait IMushafEngine {
-    /// Navigate from a verse by a specified number of lines in the given direction
-    ///
-    /// This method enables precise navigation through the Quran by moving a
-    /// specified number of lines forward or backward from a starting verse.
+    /// Navigate by lines stepping forward through verses via [`Self::next_verse`].
     ///
     /// # Arguments
-    /// * `lines` - Number of lines to navigate (can be fractional)
+    /// * `lines` - Lines to move (may be fractional; must be ≥ 0)
     /// * `from` - Starting verse position
-    /// * `direction` - Direction to navigate (Forward or Backward)
-    /// * `settings` - Navigation settings
-    ///
-    /// # Returns
-    /// A reference to the verse at the destination after navigation
+    /// * `direction` - Reading order: [`Direction::Downwards`] (1→114) or [`Direction::Upwards`] (114→1)
+    /// * `settings` - Bounds, cycling, and sura-header handling
     ///
     /// # Errors
-    /// * `NavigationError::NegativeLines` if the number of lines is negative
-    /// * `NavigationError::InvalidVerse` if the starting verse is invalid
-    /// * `NavigationError::OutOfBounds` if the navigation result is out of bounds
+    /// * [`NavigationError::NegativeLines`] if `lines` is negative
+    /// * [`NavigationError::InvalidVerse`] if the starting verse is invalid
+    /// * [`NavigationError::OutOfBounds`] if the result is outside configured bounds
     fn navigate(
         &self,
         lines: f32,
@@ -42,11 +35,11 @@ pub trait IMushafEngine {
 
     /// Navigate by lines stepping backward through verses via [`Self::previous_verse`].
     ///
-    /// Line counting and cycle tracking behave the same as [`Self::navigate`]; only the
-    /// traversal direction through the verse sequence is reversed.
+    /// Line counting and cycle tracking match [`Self::navigate`]; only the step
+    /// function changes (`previous_verse` instead of `next_verse`).
     ///
     /// This is **not** the same as calling [`Self::navigate`] with the opposite
-    /// [`Direction`] — see mushaf-engine docs `reverse-navigate.md`.
+    /// [`Direction`]. See `docs/reverse-navigate.md` in the repository.
     ///
     /// # Errors
     /// Same as [`Self::navigate`].

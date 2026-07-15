@@ -42,7 +42,7 @@ use super::Direction;
 ///
 /// ### Reading Al-Fatiha Three Times
 /// ```ignore
-/// use rust_quran_engine::navigation::{VersesNavigator, VersePosition, Direction};
+/// use mushaf_engine::navigation::{VersesNavigator, VersePosition, Direction};
 /// let navigator = VersesNavigator::builder(mushaf, metadata)
 ///     .upper_bound(VersePosition::new(1, 1))
 ///     .lower_bound(VersePosition::new(1, 7))
@@ -52,7 +52,7 @@ use super::Direction;
 ///
 /// ### Page Layout Calculation
 /// ```ignore
-/// use rust_quran_engine::navigation::{VersesNavigator, VersePosition};
+/// use mushaf_engine::navigation::{VersesNavigator, VersePosition};
 /// let navigator = VersesNavigator::builder(mushaf, metadata)
 ///     .upper_bound(VersePosition::new(2, 1))
 ///     .lower_bound(VersePosition::new(2, 50))
@@ -62,7 +62,7 @@ use super::Direction;
 ///
 /// ### Memorization Practice
 /// ```ignore
-/// use rust_quran_engine::navigation::{VersesNavigator, VersePosition, Direction};
+/// use mushaf_engine::navigation::{VersesNavigator, VersePosition, Direction};
 /// let navigator = VersesNavigator::builder(mushaf, metadata)
 ///     .upper_bound(VersePosition::new(67, 1))
 ///     .lower_bound(VersePosition::new(67, 30))
@@ -125,7 +125,7 @@ impl VersesNavigator {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationSettings, Direction, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationSettings, Direction, VersePosition};
     ///
     /// let settings = NavigationSettings::builder()
     ///     .upper_bound(VersePosition::new(1, 1))
@@ -134,7 +134,7 @@ impl VersesNavigator {
     ///
     /// ```
     /// ```ignore
-    /// use rust_quran_engine::navigation::{VersesNavigator, Direction};
+    /// use mushaf_engine::navigation::{VersesNavigator, Direction};
     /// let navigator = VersesNavigator::new(mushaf, metadata, settings, Direction::Downwards);
     /// ```
     #[must_use]
@@ -172,7 +172,7 @@ impl VersesNavigator {
     /// # Examples
     ///
     /// ```ignore
-    /// use rust_quran_engine::navigation::{VersesNavigator, VersePosition, Direction};
+    /// use mushaf_engine::navigation::{VersesNavigator, VersePosition, Direction};
     /// let navigator = VersesNavigator::builder(mushaf, metadata)
     ///     .upper_bound(VersePosition::new(2, 1))
     ///     .lower_bound(VersePosition::new(2, 50))

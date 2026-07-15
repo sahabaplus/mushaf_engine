@@ -15,7 +15,10 @@ enum LineStep {
     Reverse,
 }
 
-/// Basic implementation of the Mushaf navigation engine using King Fahad Mushaf
+/// Default [`IMushafEngine`] implementation over an in-memory [`Mushaf`].
+///
+/// Construct with [`Self::new`] or, with the `king_fahad_mushaf` feature,
+/// [`Self::king_fahad`] to load the bundled King Fahad JSON.
 pub struct BaseMushafEngine {
     pub mushaf: Arc<Mushaf>,
     pub quran_metadata: Arc<QuranMetadata>,

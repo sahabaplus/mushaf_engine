@@ -1,7 +1,13 @@
+//! King Fahad Mushaf JSON loader (feature `king_fahad_mushaf`).
+//!
+//! Converts page/verse JSON into a [`crate::Mushaf`]. Prefer
+//! [`crate::BaseMushafEngine::king_fahad`] when using the bundled data file.
+
 use crate::mushaf::{Mushaf, Page, Verse};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+/// Loader for King Fahad Quran Printing Complex Mushaf JSON.
 pub struct KingFahadMushaf;
 impl KingFahadMushaf {
     /// Load a King Fahad Mushaf from a file

@@ -1,3 +1,7 @@
+//! Navigation types: direction, bounds, settings, and results.
+//!
+//! Prefer the crate-root re-exports (`Direction`, `NavigationSettings`, `VersePosition`, …).
+
 mod direction;
 mod error;
 mod last_verse_result;

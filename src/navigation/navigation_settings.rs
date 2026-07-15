@@ -31,7 +31,7 @@ use crate::navigation::{NavigationBounds, VersePosition};
 ///
 /// ## Basic Usage
 /// ```rust
-/// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
+/// use mushaf_engine::navigation::{NavigationSettings, VersePosition};
 ///
 /// // Create settings for reading Al-Fatiha twice with headers
 /// let settings = NavigationSettings::builder()
@@ -43,7 +43,7 @@ use crate::navigation::{NavigationBounds, VersePosition};
 ///
 /// ## Page Layout Calculation
 /// ```rust
-/// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
+/// use mushaf_engine::navigation::{NavigationSettings, VersePosition};
 ///
 /// // Calculate lines without sura headers for precise page layout
 /// let settings = NavigationSettings::builder()
@@ -55,7 +55,7 @@ use crate::navigation::{NavigationBounds, VersePosition};
 ///
 /// ## Memorization Practice
 /// ```rust
-/// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
+/// use mushaf_engine::navigation::{NavigationSettings, VersePosition};
 ///
 /// // Practice specific verses multiple times
 /// let settings = NavigationSettings::builder()
@@ -121,7 +121,7 @@ impl NavigationSettings {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationSettings, VersePosition};
     ///
     /// let settings = NavigationSettings::builder()
     ///     .upper_bound(VersePosition::new(2, 1))
@@ -142,7 +142,7 @@ impl NavigationSettings {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::NavigationSettings;
+    /// use mushaf_engine::navigation::NavigationSettings;
     ///
     /// let settings = NavigationSettings::builder()
     ///     .ignore_sura_header(true); // Exclude headers for layout calculations
@@ -161,7 +161,7 @@ impl NavigationSettings {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationSettings, NavigationBounds, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationSettings, NavigationBounds, VersePosition};
     ///
     /// let bounds = NavigationBounds::new(
     ///     3,
@@ -185,7 +185,7 @@ impl NavigationSettings {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationSettings, VersePosition};
     ///
     /// let settings = NavigationSettings::builder()
     ///     .iteration_limit(5); // Allow 5 complete cycles
@@ -208,7 +208,7 @@ impl NavigationSettings {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationSettings, VersePosition};
     ///
     /// // Normal inclusive mode
     /// let settings = NavigationSettings::builder()
@@ -237,7 +237,7 @@ impl NavigationSettings {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationSettings, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationSettings, VersePosition};
     ///
     /// // Normal inclusive mode
     /// let settings = NavigationSettings::builder()

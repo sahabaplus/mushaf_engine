@@ -128,7 +128,7 @@ impl CycleInfo {
     ///
     /// # Example
     /// ```
-    /// # use rust_quran_engine::navigation::CycleInfo;
+    /// # use mushaf_engine::navigation::CycleInfo;
     /// let cycle_info = CycleInfo::new(3, true, 100.0);
     /// let direct_distance = 25.0;
     /// let total = cycle_info.reconstruct_distance(direct_distance);

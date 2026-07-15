@@ -30,7 +30,7 @@ use crate::navigation::VersePosition;
 /// # Examples
 ///
 /// ```rust
-/// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
+/// use mushaf_engine::navigation::{NavigationBounds, VersePosition};
 ///
 /// // Navigate through Al-Baqarah (Sura 2) once
 /// let bounds = NavigationBounds::new(
@@ -71,7 +71,7 @@ use crate::navigation::VersePosition;
 /// The bounds can work in two modes:
 ///
 /// ```rust
-/// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
+/// use mushaf_engine::navigation::{NavigationBounds, VersePosition};
 ///
 /// // Inclusive mode: upper_bound < lower_bound
 /// // Navigate from (1,1) to (114,6) - entire Quran
@@ -137,7 +137,7 @@ impl NavigationBounds {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationBounds, VersePosition};
     ///
     /// // Create bounds for Al-Fatiha with 3 iterations
     /// let bounds = NavigationBounds::new(
@@ -174,7 +174,7 @@ impl NavigationBounds {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationBounds, VersePosition};
     ///
     /// let bounds = NavigationBounds::default()
     ///     .iteration_limit(5); // Allow 5 complete cycles
@@ -199,7 +199,7 @@ impl NavigationBounds {
     /// # Examples
     ///
     /// ```rust
-    /// use rust_quran_engine::navigation::{NavigationBounds, VersePosition};
+    /// use mushaf_engine::navigation::{NavigationBounds, VersePosition};
     ///
     /// // Inclusive mode
     /// let inclusive = NavigationBounds::new(0, VersePosition::new(1, 1), VersePosition::new(1, 7));

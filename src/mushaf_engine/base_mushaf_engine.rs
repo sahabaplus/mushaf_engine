@@ -38,24 +38,21 @@ impl BaseMushafEngine {
         }
     }
 
-    /// Load the bundled King Fahad Mushaf JSON shipped with this crate.
+    /// Load the King Fahad Mushaf JSON bundled with this crate.
+    ///
+    /// The JSON is embedded in the binary at compile time, so a deployed binary does not need
+    /// the crate's source directory on disk.
     ///
     /// # Errors
-    /// Returns an I/O or JSON parse error if the asset cannot be read.
+    /// Returns an error if the embedded JSON cannot be parsed.
     #[cfg(feature = "king_fahad_mushaf")]
     pub fn king_fahad() -> Result<Self, std::io::Error> {
         use crate::king_fahad_mushaf::{JsonVerse, KingFahadMushaf};
-        use std::path::PathBuf;
 
-        let mut data_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        data_path.push("data");
-        data_path.push("king_fahad_mushaf.json");
-        let path = data_path
-            .to_str()
-            .ok_or_else(|| std::io::Error::other("invalid mushaf data path"))?;
-        let file_content = std::fs::read_to_string(path)?;
+        const KING_FAHAD_JSON: &str = include_str!("../../data/king_fahad_mushaf.json");
+
         let pages: Vec<Vec<JsonVerse>> =
-            serde_json::from_str(&file_content).map_err(std::io::Error::other)?;
+            serde_json::from_str(KING_FAHAD_JSON).map_err(std::io::Error::other)?;
         Ok(Self::new(Arc::new(
             KingFahadMushaf::create_mushaf_from_pages(pages),
         )))
